@@ -221,7 +221,13 @@ function buildAPI(globalOptions, html, jar) {
 				}
 		};
 		
-		require('fs').readdirSync(__dirname + '/src/').filter(v => v.endsWith('.js')).forEach(v => { api[v.replace('.js', '')] = require(`./src/${v}`)(utils.makeDefaults(html, userID, ctx), api, ctx); });
+// ✅ REPLACE IT WITH THIS NEW LINE
+require('fs')
+    .readdirSync(__dirname + '/src/')
+    .filter(v => v.endsWith('.js') && v !== 'humanBehavior.js' && v !== 'AdvancedHumanBehavior.js') 
+    .forEach(v => {
+        api[v.replace('.js', '')] = require(`./src/${v}`)(utils.makeDefaults(html, userID, ctx), api, ctx);
+    });
 		
 		// Add new API methods
 		// Initialize human behavior system
