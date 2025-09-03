@@ -491,8 +491,36 @@ async function getAppStateToLogin(loginWithEmail) {
 					}))
 					.filter(i => i.key && i.value && i.key != "x-referer");
 			}
-			if (!await checkLiveCookie(appState.map(i => i.key + "=" + i.value).join("; "), facebookAccount.userAgent)) {
-				const error = new Error("Cookie is invalid");
+			// Enhanced cookie validation with retry logic
+			const cookieString = appState.map(i => i.key + "=" + i.value).join("; ");
+			let cookieValid = false;
+			let retryCount = 0;
+			const maxRetries = 3;
+			
+			while (!cookieValid && retryCount < maxRetries) {
+				try {
+					cookieValid = await checkLiveCookie(cookieString, facebookAccount.userAgent);
+					if (!cookieValid) {
+						retryCount++;
+						if (retryCount < maxRetries) {
+							console.log(`Cookie validation failed, retrying... (${retryCount}/${maxRetries})`);
+							await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+						}
+					}
+				} catch (err) {
+					retryCount++;
+					console.log(`Cookie validation error: ${err.message}`);
+					if (retryCount >= maxRetries) {
+						const error = new Error("Cookie validation failed after retries");
+						error.name = "COOKIE_INVALID";
+						throw error;
+					}
+					await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+				}
+			}
+			
+			if (!cookieValid) {
+				const error = new Error("Cookie is invalid or expired");
 				error.name = "COOKIE_INVALID";
 				throw error;
 			}
@@ -935,6 +963,7 @@ async function startBot(loginWithEmail) {
 							let times = 5;
 
 							const spin = createOraDots(getText('login', 'retryCheckLiveCookie', times));
+							spin._start();
 							const countTimes = setInterval(() => {
 								times--;
 								if (times == 0)
@@ -949,6 +978,7 @@ async function startBot(loginWithEmail) {
 									if (cookieIsLive) {
 										clearInterval(interval);
 										clearInterval(countTimes);
+										spin._stop();
 										intervalCheckLiveCookieAndRelogin = false;
 										const keyListen = Date.now();
 										isSendNotiErrorMessage = false;
