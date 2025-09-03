@@ -117,7 +117,10 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		log.error("listenMqtt", err);
 		mqttClient.end();
 		if (ctx.globalOptions.autoReconnect) {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			// Add delay before reconnection to prevent rapid reconnection loops
+			setTimeout(() => {
+				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			}, 5000 + Math.random() * 5000); // 5-10 second delay
 		} else {
 			utils.checkLiveCookie(ctx, defaultFuncs)
 				.then(res => {
