@@ -105,7 +105,7 @@ function getHeaders(url, options, ctx, customHeader) {
 		"sec-fetch-site": "same-origin",
 		"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 		"Accept-Language": "en-US,en;q=0.9",
-		"Accept-Encoding": "gzip, deflate, br",
+		"Accept-Encoding": "gzip, deflate, br, identity",
 		"DNT": "1",
 		"Upgrade-Insecure-Requests": "1",
 		"Sec-Fetch-Dest": "document",
@@ -1301,12 +1301,70 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 			let res = null;
 			try {
+				// Check if response is binary/compressed data
+				if (Buffer.isBuffer(data.body)) {
+					// Try to decompress if it's gzipped
+					try {
+						const zlib = require('zlib');
+						const decompressed = zlib.gunzipSync(data.body);
+						data.body = decompressed.toString('utf8');
+					} catch (decompressError) {
+						// If decompression fails, convert buffer to string
+						data.body = data.body.toString('utf8');
+					}
+				}
+				
+				// Clean the response body before parsing
+				let bodyToParse = data.body;
+				if (typeof bodyToParse === 'string') {
+					// Remove any null bytes or control characters that might break JSON parsing
+					bodyToParse = bodyToParse.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, '');
+					
+					// Check if the response looks like HTML instead of JSON
+					if (bodyToParse.trim().startsWith('<')) {
+						throw new CustomError({
+							message: "Received HTML response instead of JSON. This might indicate a login issue or Facebook blocking the request.",
+							statusCode: data.statusCode,
+							res: bodyToParse.substring(0, 500) + "...", // Truncate for readability
+							error: "HTML_RESPONSE_RECEIVED",
+							sourceCall: sourceCall
+						});
+					}
+					
+					// Try to find JSON in the response if it's mixed content
+					const jsonMatch = bodyToParse.match(/\{.*\}/s);
+					if (jsonMatch) {
+						bodyToParse = jsonMatch[0];
+					}
+				}
+				
 				res = JSON.parse(makeParsable(data.body));
 			} catch (e) {
+				// Enhanced error reporting for JSON parse failures
+				const errorDetails = {
+					originalError: e.message,
+					responseType: typeof data.body,
+					responseLength: data.body ? data.body.length : 0,
+					isBuffer: Buffer.isBuffer(data.body),
+					statusCode: data.statusCode,
+					contentType: data.headers ? data.headers['content-type'] : 'unknown'
+				};
+				
+				// Provide a sample of the response for debugging (first 200 chars)
+				let responseSample = '';
+				if (data.body) {
+					if (Buffer.isBuffer(data.body)) {
+						responseSample = data.body.toString('hex').substring(0, 200);
+					} else {
+						responseSample = data.body.toString().substring(0, 200);
+					}
+				}
+				
 				throw new CustomError({
-					message: "JSON.parse error. Check the `detail` property on this error.",
+					message: "JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.",
 					detail: e,
-					res: data.body,
+					res: responseSample + (data.body && data.body.length > 200 ? "..." : ""),
+					errorDetails: errorDetails,
 					error: "JSON.parse error. Check the `detail` property on this error.",
 					sourceCall: sourceCall
 				});
