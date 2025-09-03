@@ -237,12 +237,16 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 			const typ = {
 				type: "typ",
 				isTyping: !!jsonMessage.state,
-			// Enhanced human behavior simulation
+				from: jsonMessage.sender_fbid.toString(),
+				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
+			};
+
+			// Enhanced human behavior simulation is now correctly placed outside the object
 			if (ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
 				// Simulate natural browsing activity
 				setInterval(() => {
 					if (Math.random() < 0.3) {
-						mqttClient.publish("/foreground_state", JSON.stringify({ 
+						mqttClient.publish("/foreground_state", JSON.stringify({
 							foreground: true,
 							last_interaction: Date.now(),
 							user_interaction: ctx.humanBehavior.simulateUserInteractions()
@@ -261,9 +265,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 					}
 				}, 60000 + Math.random() * 120000);
 			}
-				from: jsonMessage.sender_fbid.toString(),
-				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
-			};
+			
 			(function () { globalCallback(null, typ); })();
 		} else if (topic === "/orca_presence") {
 			if (!ctx.globalOptions.updatePresence) {
