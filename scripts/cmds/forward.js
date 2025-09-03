@@ -1,105 +1,81 @@
 module.exports = {
 	config: {
 		name: "forward",
-		version: "1.0",
-		author: "nafij pro",
-		countDown: 3,
-		role: 1,
+		aliases: ["fw", "fwd"],
+		version: "1.0", 
+		author: "NTKhang",
+		countDown: 5,
+		role: 0,
 		description: {
-			vi: "Chuyển tiếp tin nhắn đến các group khác",
-			en: "Forward messages to other groups"
+			vi: "Chuyển tiếp tin nhắn đến nhóm khác",
+			en: "Forward message to other groups"
 		},
-		category: "utility",
+		category: "box chat",
 		guide: {
-			vi: "   Reply tin nhắn và {pn} <threadID1> <threadID2>...: chuyển tiếp tin nhắn\n   Reply tin nhắn và {pn} all: chuyển tiếp đến tất cả group bot tham gia",
-			en: "   Reply message and {pn} <threadID1> <threadID2>...: forward message\n   Reply message and {pn} all: forward to all groups bot joined"
+			vi: "   {pn} <thread ID>: reply tin nhắn cần chuyển tiếp và nhập ID nhóm đích"
+				+ "\n   {pn} list: xem danh sách nhóm bạn có thể chuyển tiếp tin nhắn đến",
+			en: "   {pn} <thread ID>: reply to the message to forward and enter target thread ID"
+				+ "\n   {pn} list: view list of groups you can forward messages to"
 		}
 	},
 
 	langs: {
 		vi: {
-			forwarded: "✅ Đã chuyển tiếp tin nhắn đến %1 group(s)",
-			noReply: "❌ Vui lòng reply tin nhắn cần chuyển tiếp",
-			noTargets: "❌ Vui lòng nhập ID group đích",
-			onlyGroup: "❌ Lệnh này chỉ hoạt động trong group chat",
-			error: "❌ Lỗi: %1",
-			processing: "🔄 Đang chuyển tiếp tin nhắn..."
+			noReply: "⚠️ | Vui lòng reply tin nhắn cần chuyển tiếp",
+			invalidThreadID: "⚠️ | Thread ID không hợp lệ",
+			forwardSuccess: "✅ | Đã chuyển tiếp tin nhắn thành công",
+			forwardError: "❌ | Không thể chuyển tiếp tin nhắn",
+			groupList: "📋 | Danh sách nhóm bạn có thể chuyển tiếp:\n%1",
+			noGroups: "⚠️ | Bạn không có nhóm nào để chuyển tiếp tin nhắn"
 		},
 		en: {
-			forwarded: "✅ Message forwarded to %1 group(s)",
-			noReply: "❌ Please reply to message to forward",
-			noTargets: "❌ Please enter target group IDs",
-			onlyGroup: "❌ This command only works in group chats",
-			error: "❌ Error: %1",
-			processing: "🔄 Forwarding message..."
+			noReply: "⚠️ | Please reply to the message you want to forward",
+			invalidThreadID: "⚠️ | Invalid thread ID",
+			forwardSuccess: "✅ | Message forwarded successfully", 
+			forwardError: "❌ | Cannot forward this message",
+			groupList: "📋 | List of groups you can forward to:\n%1",
+			noGroups: "⚠️ | You don't have any groups to forward messages to"
 		}
 	},
 
-	onStart: async function ({ api, args, message, event, threadsData, getLang }) {
+	onStart: async function ({ message, event, args, api, threadsData, getLang }) {
+		const { messageReply, threadID, senderID } = event;
+
+		if (args[0] === "list") {
+			const allThreads = await threadsData.getAll();
+			const userThreads = allThreads.filter(t => 
+				t.threadID !== threadID && 
+				t.members.some(m => m.userID === senderID && m.inGroup)
+			);
+
+			if (userThreads.length === 0) {
+				return message.reply(getLang("noGroups"));
+			}
+
+			const threadList = userThreads
+				.slice(0, 10)
+				.map((t, i) => `${i + 1}. ${t.threadName || "Unnamed"} (${t.threadID})`)
+				.join("\n");
+
+			return message.reply(getLang("groupList", threadList));
+		}
+
+		if (!messageReply) {
+			return message.reply(getLang("noReply"));
+		}
+
+		const targetThreadID = args[0];
+		if (!targetThreadID || isNaN(targetThreadID)) {
+			return message.reply(getLang("invalidThreadID"));
+		}
+
+		const messageID = messageReply.messageID;
+
 		try {
-			if (!event.isGroup) {
-				return message.reply(getLang("onlyGroup"));
-			}
-
-			if (!event.messageReply) {
-				return message.reply(getLang("noReply"));
-			}
-
-			let targetThreads = [];
-
-			if (args[0] === "all") {
-				// Forward to all groups bot is in
-				const allThreads = await threadsData.getAll();
-				targetThreads = allThreads
-					.filter(thread => thread.isGroup && thread.threadID !== event.threadID)
-					.map(thread => thread.threadID);
-			} else {
-				if (args.length === 0) {
-					return message.reply(getLang("noTargets"));
-				}
-				targetThreads = args;
-			}
-
-			if (targetThreads.length === 0) {
-				return message.reply("❌ No target groups found");
-			}
-
-			const sentMsg = await message.reply(getLang("processing"));
-
-			// Check if human mode is enabled for sequential processing
-			const isHumanMode = global.GoatBot.fcaApi.getHumanBehaviorStats?.()?.isHumanMode;
-			
-			if (isHumanMode) {
-				// Sequential forwarding with human delays
-				for (const threadID of targetThreads) {
-					try {
-						await new Promise((resolve, reject) => {
-							api.forwardMessage(event.messageReply.messageID, [threadID], (err, data) => {
-								if (err) reject(err);
-								else resolve(data);
-							});
-						});
-						
-						// Human-like delay between forwards
-						await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
-					} catch (err) {
-						console.log(`Failed to forward to ${threadID}:`, err);
-					}
-				}
-			} else {
-				// Parallel forwarding (robot mode)
-				await new Promise((resolve, reject) => {
-					api.forwardMessage(event.messageReply.messageID, targetThreads, (err, data) => {
-						if (err) reject(err);
-						else resolve(data);
-					});
-				});
-			}
-
-			return message.edit(getLang("forwarded", targetThreads.length), sentMsg.messageID);
-
-		} catch (error) {
-			return message.reply(getLang("error", error.message));
+			await api.forwardMessage(messageID, [targetThreadID]);
+			return message.reply(getLang("forwardSuccess"));
+		} catch (err) {
+			return message.reply(getLang("forwardError"));
 		}
 	}
 };

@@ -1,148 +1,85 @@
 module.exports = {
 	config: {
-		name: "pending",
-		aliases: ["pendings", "requests"],
+		name: "pending", 
+		aliases: ["pendingmsg", "msgpending"],
 		version: "1.0",
-		author: "nafij pro",
+		author: "NTKhang",
 		countDown: 5,
 		role: 2,
 		description: {
-			vi: "Quản lý tin nhắn chờ phê duyệt",
-			en: "Manage pending message requests"
+			vi: "Xem và quản lý tin nhắn chờ phê duyệt",
+			en: "View and manage pending messages"
 		},
-		category: "admin",
+		category: "owner",
 		guide: {
-			vi: "   {pn}: xem danh sách tin nhắn chờ\n   {pn} accept <threadID>: chấp nhận yêu cầu\n   {pn} reject <threadID>: từ chối yêu cầu\n   {pn} acceptall: chấp nhận tất cả",
-			en: "   {pn}: view pending requests list\n   {pn} accept <threadID>: accept request\n   {pn} reject <threadID>: reject request\n   {pn} acceptall: accept all requests"
+			vi: "   {pn}: xem danh sách tin nhắn chờ phê duyệt"
+				+ "\n   {pn} accept <thread ID>: chấp nhận tin nhắn từ thread ID"
+				+ "\n   {pn} reject <thread ID>: từ chối tin nhắn từ thread ID",
+			en: "   {pn}: view list of pending messages"
+				+ "\n   {pn} accept <thread ID>: accept messages from thread ID"
+				+ "\n   {pn} reject <thread ID>: reject messages from thread ID"
 		}
 	},
 
 	langs: {
 		vi: {
-			loading: "🔄 Đang tải tin nhắn chờ phê duyệt...",
-			pendingList: "📬 Danh sách tin nhắn chờ phê duyệt:\n\n",
-			noPending: "✅ Không có tin nhắn chờ phê duyệt nào",
-			accepted: "✅ Đã chấp nhận yêu cầu từ: %1",
-			rejected: "❌ Đã từ chối yêu cầu từ: %1",
-			acceptedAll: "✅ Đã chấp nhận tất cả %1 yêu cầu chờ phê duyệt",
-			noID: "❌ Vui lòng nhập thread ID",
-			notFound: "❌ Không tìm thấy yêu cầu với ID: %1",
-			onlyBotAdmin: "❌ Chỉ admin bot mới có thể sử dụng lệnh này",
-			error: "❌ Lỗi: %1"
+			noPending: "⚠️ | Không có tin nhắn chờ phê duyệt nào",
+			pendingList: "📬 | Danh sách tin nhắn chờ phê duyệt:\n%1",
+			acceptSuccess: "✅ | Đã chấp nhận tin nhắn từ %1",
+			rejectSuccess: "✅ | Đã từ chối tin nhắn từ %1", 
+			acceptError: "❌ | Không thể chấp nhận tin nhắn",
+			rejectError: "❌ | Không thể từ chối tin nhắn",
+			invalidThreadID: "⚠️ | Thread ID không hợp lệ"
 		},
 		en: {
-			loading: "🔄 Loading pending requests...",
-			pendingList: "📬 Pending Message Requests:\n\n",
-			noPending: "✅ No pending message requests",
-			accepted: "✅ Accepted request from: %1",
-			rejected: "❌ Rejected request from: %1",
-			acceptedAll: "✅ Accepted all %1 pending requests",
-			noID: "❌ Please enter thread ID",
-			notFound: "❌ Request not found with ID: %1",
-			onlyBotAdmin: "❌ Only bot admins can use this command",
-			error: "❌ Error: %1"
+			noPending: "⚠️ | No pending messages",
+			pendingList: "📬 | List of pending messages:\n%1",
+			acceptSuccess: "✅ | Accepted messages from %1",
+			rejectSuccess: "✅ | Rejected messages from %1",
+			acceptError: "❌ | Cannot accept messages",
+			rejectError: "❌ | Cannot reject messages", 
+			invalidThreadID: "⚠️ | Invalid thread ID"
 		}
 	},
 
-	onStart: async function ({ api, args, message, event, getLang }) {
-		try {
-			// Only bot admins can manage pending requests
-			if (!global.GoatBot.config.adminBot.includes(event.senderID)) {
-				return message.reply(getLang("onlyBotAdmin"));
-			}
+	onStart: async function ({ message, event, args, api, getLang }) {
+		const { threadID } = event;
 
-			const action = args[0]?.toLowerCase();
-			const sentMsg = await message.reply(getLang("loading"));
-			
-			const pendingMessages = await new Promise((resolve, reject) => {
-				api.getPendingMessages((err, data) => {
-					if (err) reject(err);
-					else resolve(data);
-				});
-			});
-
-			if (action === "acceptall") {
-				if (pendingMessages.length === 0) {
-					return message.edit(getLang("noPending"), sentMsg.messageID);
-				}
-
-				const isHumanMode = global.GoatBot.fcaApi.getHumanBehaviorStats?.()?.isHumanMode;
+		if (!args[0]) {
+			try {
+				const pendingThreads = await api.getPendingMessages();
 				
-				if (isHumanMode) {
-					// Sequential processing in human mode
-					for (const thread of pendingMessages) {
-						try {
-							await new Promise((resolve, reject) => {
-								api.acceptPendingRequest(thread.threadID, true, (err, data) => {
-									if (err) reject(err);
-									else resolve(data);
-								});
-							});
-							await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-						} catch (err) {
-							console.log(`Failed to accept ${thread.threadID}:`, err);
-						}
-					}
-				} else {
-					// Parallel processing in robot mode
-					await Promise.allSettled(
-						pendingMessages.map(thread => 
-							new Promise((resolve, reject) => {
-								api.acceptPendingRequest(thread.threadID, true, (err, data) => {
-									if (err) reject(err);
-									else resolve(data);
-								});
-							})
-						)
-					);
+				if (pendingThreads.length === 0) {
+					return message.reply(getLang("noPending"));
 				}
 
-				return message.edit(getLang("acceptedAll", pendingMessages.length), sentMsg.messageID);
+				const threadList = pendingThreads
+					.map((t, i) => `${i + 1}. ${t.threadName || "Unknown"} (${t.threadID})\n   └ ${t.snippet}`)
+					.join("\n");
+
+				return message.reply(getLang("pendingList", threadList));
+			} catch (err) {
+				return message.reply("❌ | Error getting pending messages");
 			}
+		}
 
-			if (action === "accept" || action === "reject") {
-				const threadID = args[1];
-				if (!threadID) {
-					return message.edit(getLang("noID"), sentMsg.messageID);
-				}
+		const action = args[0].toLowerCase();
+		const targetThreadID = args[1];
 
-				const thread = pendingMessages.find(t => t.threadID === threadID);
-				if (!thread) {
-					return message.edit(getLang("notFound", threadID), sentMsg.messageID);
-				}
+		if (!targetThreadID || isNaN(targetThreadID)) {
+			return message.reply(getLang("invalidThreadID"));
+		}
 
-				await new Promise((resolve, reject) => {
-					api.acceptPendingRequest(threadID, action === "accept", (err, data) => {
-						if (err) reject(err);
-						else resolve(data);
-					});
-				});
-
-				const userName = thread.participants[0]?.name || "Unknown";
-				const response = action === "accept" ? 
-					getLang("accepted", userName) : 
-					getLang("rejected", userName);
-
-				return message.edit(response, sentMsg.messageID);
+		try {
+			if (action === "accept") {
+				await api.acceptPendingRequest(targetThreadID, true);
+				return message.reply(getLang("acceptSuccess", targetThreadID));
+			} else if (action === "reject") {
+				await api.acceptPendingRequest(targetThreadID, false);
+				return message.reply(getLang("rejectSuccess", targetThreadID));
 			}
-
-			if (pendingMessages.length === 0) {
-				return message.edit(getLang("noPending"), sentMsg.messageID);
-			}
-
-			let response = getLang("pendingList");
-			pendingMessages.slice(0, 10).forEach((thread, index) => {
-				const userName = thread.participants[0]?.name || "Unknown";
-				response += `${index + 1}. ${userName}\n`;
-				response += `   🆔 ${thread.threadID}\n`;
-				response += `   💬 ${thread.snippet || "No message"}\n`;
-				response += `   ⏰ ${new Date(parseInt(thread.timestamp)).toLocaleString()}\n\n`;
-			});
-
-			return message.edit(response, sentMsg.messageID);
-
-		} catch (error) {
-			return message.reply(getLang("error", error.message));
+		} catch (err) {
+			return message.reply(action === "accept" ? getLang("acceptError") : getLang("rejectError"));
 		}
 	}
 };
