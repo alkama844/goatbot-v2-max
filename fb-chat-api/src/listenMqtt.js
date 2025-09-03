@@ -237,16 +237,12 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 			const typ = {
 				type: "typ",
 				isTyping: !!jsonMessage.state,
-				from: jsonMessage.sender_fbid.toString(),
-				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
-			};
-
-			// Enhanced human behavior simulation is now correctly placed outside the object
+			// Enhanced human behavior simulation
 			if (ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
 				// Simulate natural browsing activity
 				setInterval(() => {
 					if (Math.random() < 0.3) {
-						mqttClient.publish("/foreground_state", JSON.stringify({
+						mqttClient.publish("/foreground_state", JSON.stringify({ 
 							foreground: true,
 							last_interaction: Date.now(),
 							user_interaction: ctx.humanBehavior.simulateUserInteractions()
@@ -265,7 +261,9 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 					}
 				}, 60000 + Math.random() * 120000);
 			}
-			
+				from: jsonMessage.sender_fbid.toString(),
+				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
+			};
 			(function () { globalCallback(null, typ); })();
 		} else if (topic === "/orca_presence") {
 			if (!ctx.globalOptions.updatePresence) {
@@ -946,6 +944,19 @@ module.exports = function (defaultFuncs, api, ctx) {
 		const msgEmitter = new MessageEmitter();
 		globalCallback = (callback || function (error, message) {
 			if (error) {
+				// Enhanced error handling for common Facebook API issues
+				if (error.error === "JSON.parse error. Check the `detail` property on this error.") {
+					log.error("listenMqtt", "Facebook returned invalid JSON response. This usually indicates:");
+					log.error("listenMqtt", "1. Account may be temporarily blocked or restricted");
+					log.error("listenMqtt", "2. Facebook may have changed their API format");
+					log.error("listenMqtt", "3. Network connectivity issues");
+					log.error("listenMqtt", "4. Cookie/session may have expired");
+					
+					// Try to provide helpful debugging info
+					if (error.errorDetails) {
+						log.error("listenMqtt", "Response details:", error.errorDetails);
+					}
+				}
 				return msgEmitter.emit("error", error);
 			}
 			msgEmitter.emit("message", message);
@@ -973,11 +984,32 @@ module.exports = function (defaultFuncs, api, ctx) {
 			})
 		};
 
-		if (!ctx.firstListen || !ctx.lastSeqId) {
-			getSeqId(defaultFuncs, api, ctx, globalCallback);
-		} else {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-		}
+		// Add retry logic for getSeqId
+		const attemptConnection = (retryCount = 0) => {
+			if (!ctx.firstListen || !ctx.lastSeqId) {
+				try {
+					getSeqId(defaultFuncs, api, ctx, (error, result) => {
+						if (error && retryCount < 3) {
+							log.warn("listenMqtt", `getSeqId failed, retrying in ${(retryCount + 1) * 2} seconds... (attempt ${retryCount + 1}/3)`);
+							setTimeout(() => attemptConnection(retryCount + 1), (retryCount + 1) * 2000);
+						} else {
+							globalCallback(error, result);
+						}
+					});
+				} catch (err) {
+					if (retryCount < 3) {
+						log.warn("listenMqtt", `Connection attempt failed, retrying... (attempt ${retryCount + 1}/3)`);
+						setTimeout(() => attemptConnection(retryCount + 1), (retryCount + 1) * 2000);
+					} else {
+						globalCallback(err);
+					}
+				}
+			} else {
+				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			}
+		};
+		
+		attemptConnection();
 
 		api.stopListening = msgEmitter.stopListening;
 		api.stopListeningAsync = msgEmitter.stopListeningAsync;
