@@ -23,19 +23,42 @@ async function checkAndSaveCookies(jar, headers, request) {
 		url: 'https://m.facebook.com/',
 		method: 'GET',
 		jar,
-		headers
+		headers,
+		timeout: 15000
 	});
-	// const path = resHome.request.uri.path;
+	
+	// Enhanced validation
+	const bodyText = resHome.body.toLowerCase();
 	const referer = resHome.request.headers.referer || '';
+	
+	// Check for various authentication issues
+	if (bodyText.includes('login') || 
+		bodyText.includes('checkpoint') || 
+		bodyText.includes('security') ||
+		bodyText.includes('verify') ||
+		resHome.statusCode === 302 ||
+		resHome.statusCode === 401) {
+		throw new Error("Authentication failed - redirected to login or security check");
+	}
+	
 	if (referer.match(/checkpoint\/\d+/)) {
 		const codeCheckpoint = referer.match(/checkpoint\/(\d+)/)[1];
 		const error = new Error(`Your account has been checkpointed ${codeCheckpoint} by Facebook. Please login to your account and complete the checkpoint process.`);
 		error.name = `CHECKPOINT_${codeCheckpoint}`;
 		throw error;
 	}
-	else {
-		return jar.getCookies(targetCookie);
+	
+	// Verify user ID is present in response
+	const cookies = jar.getCookies(targetCookie);
+	const userCookie = cookies.find(c => c.key === 'c_user' || c.name === 'c_user');
+	if (userCookie) {
+		const userId = userCookie.value || userCookie.val;
+		if (userId && !resHome.body.includes(userId)) {
+			throw new Error("User ID not found in response - authentication may have failed");
+		}
 	}
+	
+	return cookies;
 }
 
 
