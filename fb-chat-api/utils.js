@@ -1427,14 +1427,31 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 function checkLiveCookie(ctx, defaultFuncs) {
 	return defaultFuncs
-		.get("https://m.facebook.com/me", ctx.jar)
+		.get("https://www.facebook.com/me", ctx.jar)
 		.then(function (res) {
-			if (res.body.indexOf(ctx.i_userID || ctx.userID) === -1) {
+			const bodyText = res.body.toLowerCase();
+			const userId = ctx.i_userID || ctx.userID;
+			
+			// Check for login redirects or authentication failures
+			if (bodyText.includes('login') || 
+				bodyText.includes('checkpoint') || 
+				bodyText.includes('security') ||
+				res.statusCode === 302 ||
+				res.statusCode === 401) {
 				throw new CustomError({
 					message: "Not logged in.",
 					error: "Not logged in."
 				});
 			}
+			
+			// Verify user ID is present in response
+			if (userId && res.body.indexOf(userId) === -1) {
+				throw new CustomError({
+					message: "User ID not found in response.",
+					error: "Not logged in."
+				});
+			}
+			
 			return true;
 		});
 }
