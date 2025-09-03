@@ -1075,6 +1075,21 @@ async function startBot(loginWithEmail) {
 				key = randomString(10) + (key || Date.now());
 				callbackListenTime[key] = callBackListen;
 				return function (error, event) {
+					// Enhanced error handling for MQTT connection issues
+					if (error && error.error === "JSON.parse error. Check the `detail` property on this error.") {
+						log.error("MQTT_CONNECTION", "Facebook API returned invalid response. Possible causes:");
+						log.error("MQTT_CONNECTION", "- Account temporarily restricted");
+						log.error("MQTT_CONNECTION", "- Session expired");
+						log.error("MQTT_CONNECTION", "- Network connectivity issues");
+						log.error("MQTT_CONNECTION", "- Facebook API changes");
+						
+						// Wait before retrying
+						setTimeout(() => {
+							log.info("MQTT_CONNECTION", "Attempting to reconnect...");
+							global.GoatBot.Listening = api.listenMqtt(createCallBackListen());
+						}, 10000); // Wait 10 seconds before retry
+						return;
+					}
 					callbackListenTime[key](error, event);
 				};
 			}
