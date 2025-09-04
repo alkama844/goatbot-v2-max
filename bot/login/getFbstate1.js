@@ -1,5 +1,6 @@
 const cheerio = require("cheerio");
 const qs = require('qs');
+const request = require('request-promise');
 
 const targetCookie = "https://m.facebook.com/";
 const urlLoginCheckpoint = "https://m.facebook.com/login/checkpoint/?next=https://m.facebook.com/home.php?refsrc=deprecated";
@@ -59,6 +60,41 @@ async function checkAndSaveCookies(jar, headers, request) {
 			throw new Error("User ID not found in response - authentication may have failed");
 		}
 	}
+	
+	// Check for positive authentication indicators
+	const positiveIndicators = [
+		'timeline',
+		'newsfeed', 
+		'profile',
+		'fb_dtsg',
+		'home.php',
+		'messenger',
+		'__user',
+		'navigation'
+	];
+	
+	const hasPositiveIndicator = positiveIndicators.some(indicator => 
+		bodyText.includes(indicator)
+	);
+	
+	if (!hasPositiveIndicator && bodyText.length < 1000) {
+		console.log("No positive authentication indicators found");
+		throw new Error("Authentication validation failed - no positive indicators");
+	}
+	
+	// Return the filtered cookies
+	return cookies.filter(cookie => 
+		['c_user', 'xs', 'datr', 'fr', 'sb', 'i_user'].includes(cookie.key || cookie.name)
+	).map(cookie => ({
+		key: cookie.key || cookie.name,
+		value: cookie.value || cookie.val,
+		domain: cookie.domain,
+		path: cookie.path,
+		hostOnly: cookie.hostOnly,
+		creation: cookie.creation || new Date().toISOString(),
+		lastAccessed: cookie.lastAccessed || new Date().toISOString()
+	}));
+}
 	
 	console.log("Cookie validation successful");
 	return cookies;
