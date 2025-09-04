@@ -1,3 +1,4 @@
+
 /* eslint-disable no-redeclare */
 "use strict";
 const utils = require("../utils");
@@ -101,7 +102,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		},
 		keepalive: 60,
 		reschedulePings: true,
-		reconnectPeriod: 3
+		reconnectPeriod: 0
 	};
 
 	if (typeof ctx.globalOptions.proxy != "undefined") {
@@ -856,60 +857,6 @@ function markDelivery(ctx, api, threadID, messageID) {
 		});
 	}
 }
-
-// function getSeqId(defaultFuncs, api, ctx, globalCallback) {
-// 	const jar = ctx.jar;
-// 	utils
-// 		.get('https://www.facebook.com/', jar, null, ctx.globalOptions, { noRef: true })
-// 		.then(utils.saveCookies(jar))
-// 		.then(function (resData) {
-// 			const html = resData.body;
-// 			const oldFBMQTTMatch = html.match(/irisSeqID:"(.+?)",appID:219994525426954,endpoint:"(.+?)"/);
-// 			let mqttEndpoint = null;
-// 			let region = null;
-// 			let irisSeqID = null;
-// 			let noMqttData = null;
-
-// 			if (oldFBMQTTMatch) {
-// 				irisSeqID = oldFBMQTTMatch[1];
-// 				mqttEndpoint = oldFBMQTTMatch[2];
-// 				region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 				log.info("login", `Got this account's message region: ${region}`);
-// 			} else {
-// 				const newFBMQTTMatch = html.match(/{"app_id":"219994525426954","endpoint":"(.+?)","iris_seq_id":"(.+?)"}/);
-// 				if (newFBMQTTMatch) {
-// 					irisSeqID = newFBMQTTMatch[2];
-// 					mqttEndpoint = newFBMQTTMatch[1].replace(/\\\//g, "/");
-// 					region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 					log.info("login", `Got this account's message region: ${region}`);
-// 				} else {
-// 					const legacyFBMQTTMatch = html.match(/(\["MqttWebConfig",\[\],{fbid:")(.+?)(",appID:219994525426954,endpoint:")(.+?)(",pollingEndpoint:")(.+?)(3790])/);
-// 					if (legacyFBMQTTMatch) {
-// 						mqttEndpoint = legacyFBMQTTMatch[4];
-// 						region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 						log.warn("login", "Cannot get sequence ID with new RegExp. Fallback to old RegExp (without seqID)...");
-// 						log.info("login", `Got this account's message region: ${region}`);
-// 						log.info("login", `[Unused] Polling endpoint: ${legacyFBMQTTMatch[6]}`);
-// 					} else {
-// 						log.warn("login", "Cannot get MQTT region & sequence ID.");
-// 						noMqttData = html;
-// 					}
-// 				}
-// 			}
-
-// 			ctx.lastSeqId = irisSeqID;
-// 			ctx.mqttEndpoint = mqttEndpoint;
-// 			ctx.region = region;
-// 			if (noMqttData) {
-// 				api["htmlData"] = noMqttData;
-// 			}
-
-// 			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-// 		})
-// 		.catch(function (err) {
-// 			log.error("getSeqId", err);
-// 		});
-// }
 
 module.exports = function (defaultFuncs, api, ctx) {
 	let globalCallback = identity;
