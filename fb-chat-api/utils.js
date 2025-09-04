@@ -1675,6 +1675,12 @@ function enhancedErrorHandler(error, context) {
 		enhancedError.responseHeaders = error.response.headers;
 	}
 
+	// Add specific handling for 404 errors
+	if (error.statusCode === 404 || (error.response && error.response.status === 404)) {
+		enhancedError.possibleCause = "Facebook session expired or invalid credentials";
+		enhancedError.suggestedAction = "Update Facebook credentials or refresh fbstate";
+	}
+
 	return enhancedError;
 }
 
