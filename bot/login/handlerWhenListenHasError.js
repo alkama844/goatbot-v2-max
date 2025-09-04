@@ -127,11 +127,17 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 	if (error && (error.error || error.message || "").includes("parseAndCheckLogin got status code: 404")) {
 		log.err("handlerWhenListenHasError", "Facebook authentication failed with 404 error");
 		log.warn("handlerWhenListenHasError", "This indicates:");
-		log.warn("handlerWhenListenHasError", "1. Facebook session has expired");
+		log.warn("handlerWhenListenHasError", "1. Facebook session has expired or invalid fbstate");
 		log.warn("handlerWhenListenHasError", "2. Account credentials are no longer valid");
-		log.warn("handlerWhenListenHasError", "3. Facebook has changed their authentication system");
-		log.warn("handlerWhenListenHasError", "4. Need to refresh fbstate or login again");
-		log.warn("handlerWhenListenHasError", "Solution: Please update your Facebook credentials in account.txt");
+		log.warn("handlerWhenListenHasError", "3. Facebook has detected suspicious activity");
+		log.warn("handlerWhenListenHasError", "4. Account may be temporarily restricted");
+		log.warn("handlerWhenListenHasError", "");
+		log.warn("handlerWhenListenHasError", "SOLUTIONS:");
+		log.warn("handlerWhenListenHasError", "1. Get fresh fbstate from your browser cookies");
+		log.warn("handlerWhenListenHasError", "2. Use getfbstate command to generate new credentials");
+		log.warn("handlerWhenListenHasError", "3. Check if your Facebook account is accessible");
+		log.warn("handlerWhenListenHasError", "4. Wait a few minutes and try again");
+		log.warn("handlerWhenListenHasError", "5. Update account.txt with fresh credentials");
 	}
 
 	/* Handle getSeqId errors */
