@@ -265,13 +265,15 @@ module.exports = function (api, threadModel, userModel, dashBoardModel, globalMo
 								status: false
 							}
 						});
+						log.info("UNBAN", `User ${senderID} automatically unbanned - ban expired`);
 					} else {
 						// User is still banned - ignore completely
 						return;
 					}
 				}
 			} catch (err) {
-				console.log("❌ Error while checking banned user:", err.message);
+				log.warn("BANNED_USER_CHECK", "Error while checking banned user:", err.message);
+				// Continue processing if we can't check ban status
 			}
 		}
 		//end ⚡⚡⚡⚡
