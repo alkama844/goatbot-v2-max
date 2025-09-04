@@ -1439,6 +1439,7 @@ function checkLiveCookie(ctx, defaultFuncs) {
 				bodyText.includes('verify_account') ||
 				res.statusCode === 302 ||
 				res.statusCode === 401) {
+				console.log("Login redirect or auth failure detected");
 				throw new CustomError({
 					message: "Not logged in.",
 					error: "Not logged in."
@@ -1451,7 +1452,10 @@ function checkLiveCookie(ctx, defaultFuncs) {
 				if (!bodyText.includes('timeline') && 
 					!bodyText.includes('newsfeed') && 
 					!bodyText.includes('profile') &&
-					!bodyText.includes('fb_dtsg')) {
+					!bodyText.includes('fb_dtsg') &&
+					!bodyText.includes('home.php') &&
+					!bodyText.includes('messenger')) {
+					console.log("User ID and fallback indicators not found");
 					throw new CustomError({
 						message: "User ID not found in response.",
 						error: "Not logged in."
@@ -1459,8 +1463,9 @@ function checkLiveCookie(ctx, defaultFuncs) {
 				}
 			}
 			
+			console.log("Cookie validation successful");
 			return true;
-		});
+		})
 		.catch(function(err) {
 			// Enhanced error handling for network issues
 			if (err.code === 'ECONNRESET' || 
@@ -1470,6 +1475,7 @@ function checkLiveCookie(ctx, defaultFuncs) {
 				console.log("Network error during cookie check, assuming valid");
 				return true;
 			}
+			console.log("Cookie check failed:", err.message);
 			throw err;
 		});
 }
