@@ -1,5 +1,4 @@
 const axios = require("axios");
-
 /**
  * 
  * @param {string} cookie Cookie string as `c_user=123;xs=123;datr=123;` format
@@ -25,27 +24,12 @@ module.exports = async function (cookie, userAgent) {
 				"sec-fetch-site": "none",
 				"sec-fetch-user": "?1",
 				"upgrade-insecure-requests": "1"
-			},
-			timeout: 15000,
-			validateStatus: function (status) {
-				return status < 500; // Accept any status less than 500
 			}
 		});
-
+		
 		return response.data.includes('/privacy/xcs/action/logging/') || response.data.includes('/notifications.php?') || response.data.includes('href="/login/save-password-interstitial');
 	}
 	catch (e) {
-		console.log("Cookie validation error:", e.message);
-		// For network errors, assume cookie is valid to avoid false negatives
-		if (e.code === 'ECONNRESET' || 
-			e.code === 'ETIMEDOUT' || 
-			e.code === 'ENOTFOUND' ||
-			e.code === 'ECONNREFUSED' ||
-			e.message.includes('timeout') ||
-			e.message.includes('network')) {
-			console.log("Network error during validation, assuming cookie is valid");
-			return true;
-		}
 		return false;
 	}
 };
