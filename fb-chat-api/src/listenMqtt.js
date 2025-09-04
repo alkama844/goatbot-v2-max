@@ -240,6 +240,10 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 			const typ = {
 				type: "typ",
 				isTyping: !!jsonMessage.state,
+				from: jsonMessage.sender_fbid.toString(),
+				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
+			};
+			
 			// Enhanced human behavior simulation
 			if (ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
 				// Simulate natural browsing activity
@@ -264,9 +268,6 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 					}
 				}, 60000 + Math.random() * 120000);
 			}
-				from: jsonMessage.sender_fbid.toString(),
-				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
-			};
 			(function () { globalCallback(null, typ); })();
 		} else if (topic === "/orca_presence") {
 			if (!ctx.globalOptions.updatePresence) {
