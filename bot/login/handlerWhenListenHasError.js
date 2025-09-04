@@ -123,6 +123,27 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		}
 	}
 
+	/* Handle 404 errors from parseAndCheckLogin */
+	if (error && (error.error || error.message || "").includes("parseAndCheckLogin got status code: 404")) {
+		log.err("handlerWhenListenHasError", "Facebook authentication failed with 404 error");
+		log.warn("handlerWhenListenHasError", "This indicates:");
+		log.warn("handlerWhenListenHasError", "1. Facebook session has expired");
+		log.warn("handlerWhenListenHasError", "2. Account credentials are no longer valid");
+		log.warn("handlerWhenListenHasError", "3. Facebook has changed their authentication system");
+		log.warn("handlerWhenListenHasError", "4. Need to refresh fbstate or login again");
+		log.warn("handlerWhenListenHasError", "Solution: Please update your Facebook credentials in account.txt");
+	}
+
+	/* Handle getSeqId errors */
+	if (error && error.sourceCall && error.sourceCall.includes("getSeqId")) {
+		log.err("handlerWhenListenHasError", "getSeqId error detected - connection to Facebook failed");
+		log.warn("handlerWhenListenHasError", "This is usually caused by:");
+		log.warn("handlerWhenListenHasError", "1. Invalid or expired Facebook session");
+		log.warn("handlerWhenListenHasError", "2. Facebook server maintenance");
+		log.warn("handlerWhenListenHasError", "3. Network connectivity issues");
+		log.warn("handlerWhenListenHasError", "4. Account restrictions or bans");
+	}
+
 	/* AND YOU CAN CUSTOM YOUR CODE HERE */
 
 };
