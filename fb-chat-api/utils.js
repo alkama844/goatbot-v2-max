@@ -1,3 +1,4 @@
+
 /* eslint-disable no-prototype-builtins */
 "use strict";
 
@@ -1300,109 +1301,14 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 				});
 
 			let res = null;
-			let body = data.body; // Use a mutable variable for body
-
 			try {
-				// Check if response is binary/compressed data
-				if (Buffer.isBuffer(body)) {
-					// Try to decompress if it's gzipped
-					try {
-						const zlib = require('zlib');
-						const decompressed = zlib.gunzipSync(body);
-						body = decompressed.toString('utf8');
-					} catch (decompressError) {
-						// If decompression fails, convert buffer to string
-						body = body.toString('utf8');
-					}
-				}
-
-				// Clean the response body before parsing
-				if (typeof body === 'string') {
-					// Remove any null bytes or control characters that might break JSON parsing
-					body = body.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, '');
-
-					// Check if the response looks like HTML instead of JSON
-					if (body.trim().startsWith('<')) {
-						throw new CustomError({
-							message: "Received HTML response instead of JSON. This might indicate a login issue or Facebook blocking the request.",
-							statusCode: data.statusCode,
-							res: body.substring(0, 500) + "...", // Truncate for readability
-							error: "HTML_RESPONSE_RECEIVED",
-							sourceCall: sourceCall
-						});
-					}
-
-					// Try to find JSON in the response if it's mixed content
-					const jsonMatch = body.match(/\{.*\}/s);
-					if (jsonMatch) {
-						body = jsonMatch[0];
-					}
-				}
-
-				// Enhanced error handling for non-JSON responses with null safety
-				if (data && data.statusCode && data.statusCode >= 300) {
-					throw new CustomError({
-						message: "Request failed with status " + data.statusCode,
-						statusCode: data.statusCode,
-						res: body,
-						error: "Request failed with status " + data.statusCode + ". Response: " + (body ? body.substring(0, 500) : 'No response body'),
-						sourceCall: sourceCall
-					});
-				}
-
-				// Check if response is binary/compressed data
-				if (typeof body === 'string' && body.length > 0) {
-					// Check for binary content using multiple methods
-					const isBinary = body.charCodeAt && (
-						body.charCodeAt(0) < 32 || 
-						/[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(body.substring(0, Math.min(100, body.length)))
-					);
-					
-					if (isBinary) {
-						throw new CustomError({
-							message: "Received binary/compressed data instead of JSON. This usually indicates Facebook authentication issues or rate limiting.",
-							detail: new Error("Binary response detected"),
-							res: body.length > 100 ? body.substring(0, 100) + "..." : body,
-							errorDetails: {
-								originalError: "Binary response detected",
-								responseType: typeof body,
-								responseLength: body.length,
-								isBuffer: Buffer.isBuffer(body),
-								statusCode: data?.statusCode || 'unknown',
-								contentType: data?.headers?.['content-type'] || 'unknown'
-							},
-							error: "BINARY_RESPONSE_RECEIVED",
-							sourceCall: sourceCall
-						});
-					}
-				}
-
-				res = JSON.parse(makeParsable(body));
+				res = JSON.parse(makeParsable(data.body));
 			} catch (e) {
-				// Enhanced error details with null safety
-				const errorDetails = {
-					originalError: e?.message || 'Unknown parsing error',
-					responseType: typeof body,
-					responseLength: body ? body.length : 0,
-					isBuffer: Buffer.isBuffer(body),
-					statusCode: data?.statusCode || 'unknown',
-					contentType: data?.headers?.['content-type'] || 'unknown'
-				};
-
-				// Check if response looks like compressed/binary data
-				if (body && typeof body === 'string' && body.length > 0) {
-					const isLikelyBinary = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(body);
-					if (isLikelyBinary) {
-						errorDetails.possibleCause = 'Response appears to be compressed or binary data';
-					}
-				}
-
 				throw new CustomError({
-					message: 'JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.',
+					message: 'JSON.parse error.',
 					detail: e,
-					res: body ? (body.length > 500 ? body.substring(0, 500) + "..." : body) : 'No response body',
-					errorDetails,
-					error: 'JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.',
+					res: data.body,
+					error: 'JSON.parse error.',
 					sourceCall: sourceCall
 				});
 			}
@@ -1450,7 +1356,7 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 			if (res.error === 1357001) {
 				throw new CustomError({
-					message: "Facebook blocked login. Please visit https://facebook.com and check your account.",
+					message: "Not logged in.",
 					error: "Not logged in.",
 					res: res,
 					statusCode: data.statusCode,
@@ -1460,35 +1366,6 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 			return res;
 		});
 	};
-}
-
-function checkLiveCookie(ctx, defaultFuncs) {
-	// Enhanced validation with better error handling
-	return new Promise((resolve) => {
-		// Try a simple request to verify session
-		defaultFuncs
-			.httpGet("https://www.facebook.com/", ctx.jar, null, ctx.globalOptions, ctx.req)
-			.then((res) => {
-				// Check if we get redirected to login
-				if (res.body && res.body.includes('login_form')) {
-					resolve(false);
-				} else {
-					resolve(true);
-				}
-			})
-			.catch((err) => {
-				// For network errors, assume valid to avoid false negatives
-				if (err.code === 'ECONNRESET' || 
-					err.code === 'ETIMEDOUT' || 
-					err.code === 'ENOTFOUND' ||
-					err.statusCode === 404) {
-					console.log("Network/404 error in cookie check, assuming valid");
-					resolve(true);
-				} else {
-					resolve(false);
-				}
-			});
-	});
 }
 
 function saveCookies(jar) {
@@ -1625,6 +1502,7 @@ function getAppState(jar) {
 		.concat(jar.getCookies("https://facebook.com"))
 		.concat(jar.getCookies("https://www.messenger.com"));
 }
+
 module.exports = {
 	pinMessage: require("./src/pinMessage"),
 	forwardMessage: require("./src/forwardMessage"),
@@ -1680,32 +1558,5 @@ module.exports = {
 	decodeClientPayload,
 	getAppState,
 	getAdminTextMessageType,
-	setProxy,
-	checkLiveCookie
+	setProxy
 };
-
-// Enhanced error handling for better debugging
-function enhancedErrorHandler(error, context) {
-	const enhancedError = {
-		...error,
-		context: context,
-		timestamp: new Date().toISOString(),
-		userAgent: context?.globalOptions?.userAgent || "Unknown"
-	};
-
-	// Log additional debugging info
-	if (error.response) {
-		enhancedError.statusCode = error.response.status;
-		enhancedError.responseHeaders = error.response.headers;
-	}
-
-	// Add specific handling for 404 errors
-	if (error.statusCode === 404 || (error.response && error.response.status === 404)) {
-		enhancedError.possibleCause = "Facebook session expired or invalid credentials";
-		enhancedError.suggestedAction = "Update Facebook credentials or refresh fbstate";
-	}
-
-	return enhancedError;
-}
-
-module.exports.enhancedErrorHandler = enhancedErrorHandler;
