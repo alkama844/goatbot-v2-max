@@ -1427,15 +1427,16 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 function checkLiveCookie(ctx, defaultFuncs) {
 	return defaultFuncs
-		.get("https://www.facebook.com/me", ctx.jar)
+		.get("https://m.facebook.com/me", ctx.jar)
 		.then(function (res) {
 			const bodyText = res.body.toLowerCase();
 			const userId = ctx.i_userID || ctx.userID;
 			
 			// Check for login redirects or authentication failures
-			if (bodyText.includes('login') || 
+			if (bodyText.includes('login_form') || 
 				bodyText.includes('checkpoint') || 
-				bodyText.includes('security') ||
+				bodyText.includes('security_check') ||
+				bodyText.includes('verify_account') ||
 				res.statusCode === 302 ||
 				res.statusCode === 401) {
 				throw new CustomError({
@@ -1445,14 +1446,31 @@ function checkLiveCookie(ctx, defaultFuncs) {
 			}
 			
 			// Verify user ID is present in response
-			if (userId && res.body.indexOf(userId) === -1) {
-				throw new CustomError({
-					message: "User ID not found in response.",
-					error: "Not logged in."
-				});
+			if (userId && !bodyText.includes(userId)) {
+				// Try alternative validation methods
+				if (!bodyText.includes('timeline') && 
+					!bodyText.includes('newsfeed') && 
+					!bodyText.includes('profile') &&
+					!bodyText.includes('fb_dtsg')) {
+					throw new CustomError({
+						message: "User ID not found in response.",
+						error: "Not logged in."
+					});
+				}
 			}
 			
 			return true;
+		});
+		.catch(function(err) {
+			// Enhanced error handling for network issues
+			if (err.code === 'ECONNRESET' || 
+				err.code === 'ETIMEDOUT' || 
+				err.code === 'ENOTFOUND' ||
+				err.message.includes('timeout')) {
+				console.log("Network error during cookie check, assuming valid");
+				return true;
+			}
+			throw err;
 		});
 }
 

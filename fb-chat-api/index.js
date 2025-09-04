@@ -515,6 +515,27 @@ function login(loginData, options, callback) {
 				});
 				loginHelper(loginData.appState, loginData.email, loginData.password, globalOptions, callback, prCallback);
 		} else if (loginData.appState) {
+			
+			// Enhanced appState validation
+			if (!Array.isArray(loginData.appState)) {
+				return callback(new Error("appState must be an array"));
+			}
+			
+			if (loginData.appState.length === 0) {
+				return callback(new Error("appState cannot be empty"));
+			}
+			
+			// Check for essential cookies
+			const hasEssentialCookies = loginData.appState.some(cookie => 
+				(cookie.key === 'c_user' || cookie.name === 'c_user')
+			) && loginData.appState.some(cookie => 
+				(cookie.key === 'xs' || cookie.name === 'xs')
+			);
+			
+			if (!hasEssentialCookies) {
+				return callback(new Error("appState missing essential cookies (c_user, xs). Please provide a complete cookie set."));
+			}
+			
 				setOptions(globalOptions, options);
 				return loginHelper(loginData.appState, loginData.email, loginData.password, globalOptions, callback, prCallback);
 		}

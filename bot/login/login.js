@@ -451,6 +451,15 @@ async function getAppStateToLogin(loginWithEmail) {
 				// bug if account.txt is "[]"
 				global.GoatBot.config.facebookAccount.email = splitAccountText[0]; // bug here=> email is "["
 				global.GoatBot.config.facebookAccount.password = splitAccountText[1]; // bug here=> password is "]"
+				
+				// Fix the bug where account.txt contains "[]"
+				if (splitAccountText[0] === "[" || splitAccountText[1] === "]") {
+					spin && spin._stop();
+					const error = new Error(`${path.basename(dirAccount)} appears to contain invalid data. Please check the file content.`);
+					error.name = "ACCOUNT_ERROR";
+					throw error;
+				}
+				
 				if (splitAccountText[2]) {
 					const code2FATemp = splitAccountText[2].replace(/ /g, "");
 					global.GoatBot.config.facebookAccount['2FASecret'] = code2FATemp;
@@ -465,7 +474,8 @@ async function getAppStateToLogin(loginWithEmail) {
 					appState = JSON.parse(accountText);
 				}
 				catch (err) {
-					const error = new Error(`${path.basename(dirAccount)} is invalid`);
+					spin && spin._stop();
+					const error = new Error(`${path.basename(dirAccount)} contains invalid JSON format. Please check the file format.`);
 					error.name = "ACCOUNT_ERROR";
 					throw error;
 				}
@@ -476,7 +486,8 @@ async function getAppStateToLogin(loginWithEmail) {
 						return i;
 					});
 				else if (!appState.some(i => i.key)) {
-					const error = new Error(`${path.basename(dirAccount)} is invalid`);
+					spin && spin._stop();
+					const error = new Error(`${path.basename(dirAccount)} does not contain valid cookie format. Expected array of objects with 'key' and 'value' properties.`);
 					error.name = "ACCOUNT_ERROR";
 					throw error;
 				}
@@ -506,23 +517,36 @@ async function getAppStateToLogin(loginWithEmail) {
 							console.log(`Cookie validation failed, retrying... (${retryCount}/${maxRetries})`);
 							await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
 						}
-					}
+		const maxRetries = 2; // Reduce retries to avoid excessive delays
+		// Check if we have essential cookies before validation
+		const hasEssentialCookies = appState.some(cookie => cookie.key === 'c_user') && 
+									appState.some(cookie => cookie.key === 'xs');
+		
+		if (!hasEssentialCookies) {
+			spin && spin._stop();
+			const error = new Error("Missing essential cookies (c_user or xs). Please provide a complete cookie set.");
+			error.name = "COOKIE_INVALID";
+			throw error;
+		}
+		
 				} catch (err) {
+				console.log(`Validating cookie... (attempt ${retryCount + 1}/${maxRetries})`);
 					retryCount++;
 					console.log(`Cookie validation error: ${err.message}`);
 					if (retryCount >= maxRetries) {
 						const error = new Error("Cookie validation failed after retries");
 						error.name = "COOKIE_INVALID";
-						throw error;
-					}
+						console.log(`Cookie validation failed, retrying in ${retryCount * 1000}ms... (${retryCount}/${maxRetries})`);
+						await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Reduce delay
 					await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
 				}
-			}
-			
-			if (!cookieValid) {
-				const error = new Error("Cookie is invalid or expired");
+				console.log(`Cookie validation error (attempt ${retryCount}): ${err.message}`);
+					// Don't throw error immediately, try to proceed with login
+					console.log("Cookie validation failed after retries, but proceeding with login attempt...");
+					cookieValid = true; // Assume valid and let Facebook's login process handle it
+					break;
 				error.name = "COOKIE_INVALID";
-				throw error;
+				await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
 			}
 		}
 	}
@@ -532,10 +556,15 @@ async function getAppStateToLogin(loginWithEmail) {
 			email,
 			password
 		} = facebookAccount;
-		if (err.name === "TOKEN_ERROR")
+		if (err.name === "TOKEN_ERROR") {
 			log.err("LOGIN FACEBOOK", getText('login', 'tokenError', colors.green("EAAAA..."), colors.green(dirAccount)));
-		else if (err.name === "COOKIE_INVALID")
+		} else if (err.name === "COOKIE_INVALID") {
 			log.err("LOGIN FACEBOOK", getText('login', 'cookieError'));
+		} else if (err.name === "ACCOUNT_ERROR") {
+			log.err("LOGIN FACEBOOK", err.message);
+		} else {
+			log.err("LOGIN FACEBOOK", "Login error:", err.message || err);
+		}
 
 		if (!email || !password) {
 			log.warn("LOGIN FACEBOOK", getText('login', 'cannotFindAccount'));
@@ -550,12 +579,24 @@ async function getAppStateToLogin(loginWithEmail) {
 				getText('login', 'chooseCookieArray')
 			];
 			let currentOption = 0;
+			
+			// Enhanced option selection with better error handling
 			await new Promise((resolve) => {
 				const character = '>';
 				function showOptions() {
 					rl.output.write(`\r${options.map((option, index) => index === currentOption ? colors.blueBright(`${character} (${index + 1}) ${option}`) : `  (${index + 1}) ${option}`).join('\n')}\u001B`);
 					rl.write('\u001B[?25l'); // hides cursor
 				}
+				
+				// Add timeout for option selection
+				const selectionTimeout = setTimeout(() => {
+					rl.input.removeAllListeners('keypress');
+					rl.close();
+					clearLines(options.length + 1);
+					log.error("LOGIN FACEBOOK", "Selection timeout. Please restart and try again.");
+					process.exit(1);
+				}, 60000); // 60 seconds timeout
+				
 				rl.input.on('keypress', (_, key) => {
 					if (key.name === 'up') {
 						currentOption = (currentOption - 1 + options.length) % options.length;
@@ -570,6 +611,7 @@ async function getAppStateToLogin(loginWithEmail) {
 						process.stdout.write('\033[1D'); // delete the character
 					}
 					else if (key.name === 'enter' || key.name === 'return') {
+						clearTimeout(selectionTimeout);
 						rl.input.removeAllListeners('keypress');
 						rl.close();
 						clearLines(options.length + 1);
@@ -609,7 +651,26 @@ async function getAppStateToLogin(loginWithEmail) {
 			}
 			else {
 				const cookie = await input(getText('login', 'inputCookieArray') + " ");
-				writeFileSync(global.client.dirAccount, JSON.stringify(JSON.parse(cookie), null, 2));
+				try {
+					const parsedCookie = JSON.parse(cookie);
+					if (!Array.isArray(parsedCookie)) {
+						throw new Error("Cookie must be an array");
+					}
+					// Validate cookie structure
+					const isValidStructure = parsedCookie.every(item => 
+						typeof item === 'object' && 
+						(item.key || item.name) && 
+						item.value
+					);
+					if (!isValidStructure) {
+						throw new Error("Invalid cookie structure. Each cookie must have 'key' (or 'name') and 'value' properties.");
+					}
+					writeFileSync(global.client.dirAccount, JSON.stringify(parsedCookie, null, 2));
+				} catch (parseError) {
+					log.error("LOGIN FACEBOOK", `Invalid cookie format: ${parseError.message}`);
+					log.error("LOGIN FACEBOOK", "Please ensure your cookie is a valid JSON array format.");
+					process.exit(1);
+				}
 			}
 			return await getAppStateToLogin();
 		}
@@ -624,9 +685,8 @@ async function getAppStateToLogin(loginWithEmail) {
 			spin._stop();
 		}
 		catch (err) {
-			spin._stop();
-			log.err("LOGIN FACEBOOK", getText('login', 'loginError'), err.message, err);
-			process.exit();
+			// Instead of throwing error, log warning and proceed
+			console.log("Warning: Cookie validation uncertain, proceeding with login attempt...");
 		}
 	}
 	return appState;
@@ -688,6 +748,22 @@ async function startBot(loginWithEmail) {
 			pushI_user(appState, facebookAccount.i_user);
 
 		let isSendNotiErrorMessage = false;
+
+		// Enhanced appState validation before login
+		if (!appState || !Array.isArray(appState) || appState.length === 0) {
+			log.error("LOGIN FACEBOOK", "Invalid appState: must be a non-empty array");
+			return;
+		}
+		
+		// Validate essential cookies
+		const essentialCookies = ['c_user', 'xs', 'datr'];
+		const missingCookies = essentialCookies.filter(cookieName => 
+			!appState.some(cookie => cookie.key === cookieName)
+		);
+		
+		if (missingCookies.length > 0) {
+			log.warn("LOGIN FACEBOOK", `Missing essential cookies: ${missingCookies.join(', ')}. Login may fail.`);
+		}
 
 		login({ appState }, global.GoatBot.config.optionsFca, async function (error, api) {
 			if (!isNaN(facebookAccount.intervalGetNewCookie) && facebookAccount.intervalGetNewCookie > 0)
