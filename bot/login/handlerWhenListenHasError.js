@@ -112,7 +112,7 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		log.warn("handlerWhenListenHasError", "2. Temporary Facebook server issues");
 		log.warn("handlerWhenListenHasError", "3. Need to refresh authentication or cookies");
 		log.warn("handlerWhenListenHasError", "4. Account may need manual verification");
-		
+
 		// Additional suggestions for JSON parse errors
 		if (error.errorDetails) {
 			const details = error.errorDetails;
@@ -140,7 +140,7 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		log.warn("handlerWhenListenHasError", "4. Wait a few minutes and try again");
 		log.warn("handlerWhenListenHasError", "5. Update account.txt with fresh credentials");
 		log.warn("handlerWhenListenHasError", "6. Try logging into Facebook manually first");
-		
+
 		// Auto-retry after a delay if autoReLogin is enabled
 		if (global.GoatBot.config.autoReLogin) {
 			log.info("handlerWhenListenHasError", "Auto re-login is enabled, will retry in 30 seconds...");
@@ -152,7 +152,7 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 	}
 
 	/* Handle getSeqId errors */
-	if (error && error.sourceCall && error.sourceCall.includes("getSeqId")) {
+	if (error && typeof error.sourceCall === 'string' && error.sourceCall.includes("getSeqId")) {
 		log.err("handlerWhenListenHasError", "getSeqId error detected - connection to Facebook failed");
 		log.warn("handlerWhenListenHasError", "This is usually caused by:");
 		log.warn("handlerWhenListenHasError", "1. Invalid or expired Facebook session");
