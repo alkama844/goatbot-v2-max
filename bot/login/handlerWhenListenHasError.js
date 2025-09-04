@@ -131,6 +131,7 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		log.warn("handlerWhenListenHasError", "2. Account credentials are no longer valid");
 		log.warn("handlerWhenListenHasError", "3. Facebook has detected suspicious activity");
 		log.warn("handlerWhenListenHasError", "4. Account may be temporarily restricted");
+		log.warn("handlerWhenListenHasError", "5. Facebook endpoint changes or server issues");
 		log.warn("handlerWhenListenHasError", "");
 		log.warn("handlerWhenListenHasError", "SOLUTIONS:");
 		log.warn("handlerWhenListenHasError", "1. Get fresh fbstate from your browser cookies");
@@ -138,6 +139,16 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		log.warn("handlerWhenListenHasError", "3. Check if your Facebook account is accessible");
 		log.warn("handlerWhenListenHasError", "4. Wait a few minutes and try again");
 		log.warn("handlerWhenListenHasError", "5. Update account.txt with fresh credentials");
+		log.warn("handlerWhenListenHasError", "6. Try logging into Facebook manually first");
+		
+		// Auto-retry after a delay if autoReLogin is enabled
+		if (global.GoatBot.config.autoReLogin) {
+			log.info("handlerWhenListenHasError", "Auto re-login is enabled, will retry in 30 seconds...");
+			setTimeout(() => {
+				log.info("handlerWhenListenHasError", "Attempting automatic re-login due to 404 error...");
+				global.GoatBot.reLoginBot();
+			}, 30000);
+		}
 	}
 
 	/* Handle getSeqId errors */
