@@ -1463,8 +1463,32 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 }
 
 function checkLiveCookie(ctx, defaultFuncs) {
-	// Simplified validation for better reliability
-	return Promise.resolve(true);
+	// Enhanced validation with better error handling
+	return new Promise((resolve) => {
+		// Try a simple request to verify session
+		defaultFuncs
+			.httpGet("https://www.facebook.com/", ctx.jar, null, ctx.globalOptions, ctx.req)
+			.then((res) => {
+				// Check if we get redirected to login
+				if (res.body && res.body.includes('login_form')) {
+					resolve(false);
+				} else {
+					resolve(true);
+				}
+			})
+			.catch((err) => {
+				// For network errors, assume valid to avoid false negatives
+				if (err.code === 'ECONNRESET' || 
+					err.code === 'ETIMEDOUT' || 
+					err.code === 'ENOTFOUND' ||
+					err.statusCode === 404) {
+					console.log("Network/404 error in cookie check, assuming valid");
+					resolve(true);
+				} else {
+					resolve(false);
+				}
+			});
+	});
 }
 
 function saveCookies(jar) {
