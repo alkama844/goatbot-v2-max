@@ -887,7 +887,7 @@ function markDelivery(ctx, api, threadID, messageID) {
 // 					if (legacyFBMQTTMatch) {
 // 						mqttEndpoint = legacyFBMQTTMatch[4];
 // 						region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 						log.warn("login", `Cannot get sequence ID with new RegExp. Fallback to old RegExp (without seqID)...`);
+// 						log.warn("login", "Cannot get sequence ID with new RegExp. Fallback to old RegExp (without seqID)...");
 // 						log.info("login", `Got this account's message region: ${region}`);
 // 						log.info("login", `[Unused] Polling endpoint: ${legacyFBMQTTMatch[6]}`);
 // 					} else {
@@ -915,12 +915,13 @@ module.exports = function (defaultFuncs, api, ctx) {
 	let globalCallback = identity;
 	getSeqId = function getSeqId() {
 		ctx.t_mqttCalled = false;
-		defaultFuncs
-			.post("https://www.facebook.com/api/graphqlbatch/", ctx.jar, form)
+		return utils
+			.get('https://www.facebook.com/api/graphqlbatch/', ctx.jar, null, ctx.globalOptions)
 			.then(utils.parseAndCheckLogin(ctx, defaultFuncs))
-			.then((resData) => {
+			.then(function(resData) {
+				if (resData && resData.error) throw resData;
 				if (utils.getType(resData) != "Array") throw { error: "Not logged in", res: resData };
-				if (resData && resData[resData.length - 1].error_results > 0) throw resData[0].o0.errors;
+				if (resData[resData.length - 1].error_results > 0) throw resData[0].o0.errors;
 				if (resData[resData.length - 1].successful_results === 0) throw { error: "getSeqId: there was no successful_results", res: resData };
 				if (resData[0].o0.data.viewer.message_threads.sync_sequence_id) {
 					ctx.lastSeqId = resData[0].o0.data.viewer.message_threads.sync_sequence_id;
@@ -1004,20 +1005,44 @@ module.exports = function (defaultFuncs, api, ctx) {
 
 		// Add retry logic for getSeqId
 		const attemptConnection = (retryCount = 0) => {
+			const maxRetries = 3;
+			const baseDelay = 2000; // 2 seconds
+
 			if (!ctx.firstListen || !ctx.lastSeqId) {
 				try {
-					getSeqId(defaultFuncs, api, ctx, (error, result) => {
-						if (error && retryCount < 3) {
-							log.warn("listenMqtt", `getSeqId failed, retrying in ${(retryCount + 1) * 2} seconds... (attempt ${retryCount + 1}/3)`);
-							setTimeout(() => attemptConnection(retryCount + 1), (retryCount + 1) * 2000);
-						} else {
-							globalCallback(error, result);
-						}
-					});
+					getSeqId()
+						.then(() => {
+							// Success - connection established
+						})
+						.catch((error) => {
+							log.error("getSeqId", "Connection failed:", error);
+
+							// Handle specific error types
+							if (error && error.error && error.error.includes("JSON.parse error")) {
+								log.warn("getSeqId", "Facebook returned non-JSON data. This usually indicates:");
+								log.warn("getSeqId", "1. Account restrictions or rate limiting");
+								log.warn("getSeqId", "2. Temporary Facebook server issues");
+								log.warn("getSeqId", "3. Need to refresh authentication or cookies");
+
+								if (error.errorDetails && error.errorDetails.possibleCause) {
+									log.warn("getSeqId", `Possible cause: ${error.errorDetails.possibleCause}`);
+								}
+							}
+
+							if (retryCount < maxRetries) {
+								const delay = baseDelay * Math.pow(2, retryCount);
+								log.warn("listenMqtt", `getSeqId failed, retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+								setTimeout(() => attemptConnection(retryCount + 1), delay);
+							} else {
+								log.error("listenMqtt", "Max retries exceeded for getSeqId");
+								globalCallback(error);
+							}
+						});
 				} catch (err) {
-					if (retryCount < 3) {
-						log.warn("listenMqtt", `Connection attempt failed, retrying... (attempt ${retryCount + 1}/3)`);
-						setTimeout(() => attemptConnection(retryCount + 1), (retryCount + 1) * 2000);
+					if (retryCount < maxRetries) {
+						const delay = baseDelay * Math.pow(2, retryCount);
+						log.warn("listenMqtt", `Connection attempt failed, retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+						setTimeout(() => attemptConnection(retryCount + 1), delay);
 					} else {
 						globalCallback(err);
 					}
