@@ -995,67 +995,34 @@ async function startBot(loginWithEmail) {
 			// —————————————————— CALLBACK LISTEN —————————————————— //
 			async function callBackListen(error, event) {
 				if (error) {
-					global.responseUptimeCurrent = responseUptimeError;
-					if (
-						error.error == "Not logged in" ||
-						error.error == "Not logged in." ||
-						error.error == "Connection refused: Server unavailable"
-					) {
-						log.err("NOT LOGGEG IN", getText('login', 'notLoggedIn'), error);
-						global.responseUptimeCurrent = responseUptimeError;
-						global.statusAccountBot = 'can\'t login';
-						if (!isSendNotiErrorMessage) {
-							await handlerWhenListenHasError({ api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, error });
-							isSendNotiErrorMessage = true;
-						}
+					// Log the specific error type for debugging
+					console.log(chalk.red('MQTT Error Type:'), err.error || 'Unknown');
+					console.log(chalk.red('MQTT Error Details:'), err.errorDetails || 'No details');
 
-						if (global.GoatBot.config.autoRestartWhenListenMqttError)
-							process.exit(2);
-						else {
-							// log.dev("ACCOUNT LOCKED, start relogin...");
-							// await stopListening();
-							// log.dev("STOP LISTENING SUCCESS");
-							const keyListen = Object.keys(callbackListenTime).pop();
-							if (callbackListenTime[keyListen])
-								callbackListenTime[keyListen] = () => { };
-							const cookieString = appState.map(i => i.key + "=" + i.value).join("; ");
-							// log.dev("GET COOKIE SUCCESS");
-							// log.dev(cookieString);
+					if (err.error === "Connection closed." && global.GoatBot.config.autoReLogin) {
+						console.log(chalk.yellow(`›`) + ` auto re-login...`);
+						return global.GoatBot.reLoginBot();
+					}
 
-							let times = 5;
+					// Handle JSON parse errors specifically
+					if (err.error && err.error.includes("JSON.parse error")) {
+						console.log(chalk.yellow('Warning: Facebook returned non-JSON data. This may indicate:'));
+						console.log(chalk.yellow('- Account restrictions or rate limiting'));
+						console.log(chalk.yellow('- Temporary Facebook server issues'));
+						console.log(chalk.yellow('- Need to refresh authentication'));
 
-							const spin = createOraDots(getText('login', 'retryCheckLiveCookie', times));
-							const countTimes = setInterval(() => {
-								times--;
-								if (times == 0)
-									times = 5;
-								spin.text = getText('login', 'retryCheckLiveCookie', times);
-							}, 1000);
-
-							if (intervalCheckLiveCookieAndRelogin == false) {
-								intervalCheckLiveCookieAndRelogin = true;
-								const interval = setInterval(async () => {
-									const cookieIsLive = await checkLiveCookie(cookieString, facebookAccount.userAgent);
-									if (cookieIsLive) {
-										clearInterval(interval);
-										clearInterval(countTimes);
-										intervalCheckLiveCookieAndRelogin = false;
-										const keyListen = Date.now();
-										isSendNotiErrorMessage = false;
-										global.GoatBot.Listening = api.listenMqtt(createCallBackListen(keyListen));
-									}
-								}, 5000);
+						// Wait before retrying
+						setTimeout(() => {
+							if (!stopListening && global.GoatBot.config.autoReLogin) {
+								console.log(chalk.blue('Attempting automatic re-login due to JSON parse error...'));
+								global.GoatBot.reLoginBot();
 							}
-						}
-						return;
+						}, 5000); // Wait 5 seconds before retry
 					}
-					else if (error == "Connection closed." || error == "Connection closed by user.") /* by stopListening; */ {
-						return;
-					}
-					else {
-						await handlerWhenListenHasError({ api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, error });
-						return log.err("LISTEN_MQTT", getText('login', 'callBackError'), error);
-					}
+
+					return require("./handlerWhenListenHasError.js")({
+						api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, error: err
+					});
 				}
 				global.responseUptimeCurrent = responseUptimeSuccess;
 				global.statusAccountBot = 'good';
