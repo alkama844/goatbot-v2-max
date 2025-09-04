@@ -27,7 +27,7 @@ const topics = [
 	"/orca_presence",
 	//Will receive /sr_res right here.
 	"/pin_messages",
-	"/message_reactions", 
+	"/message_reactions",
 	"/read_receipts",
 	"/delivery_receipts",
 
@@ -115,6 +115,15 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
+		// Check if the error is due to a non-JSON response
+		if (err.message && err.message.includes("invalid json response")) {
+			log.error("listenMqtt", "Facebook returned non-JSON data. This could be due to:");
+			log.error("listenMqtt", "1. Account restrictions or limitations.");
+			log.error("listenMqtt", "2. Facebook rate limiting your requests.");
+			log.error("listenMqtt", "3. Expired session cookies.");
+			log.error("listenMqtt", "4. Facebook's security measures detecting bot-like activity.");
+			log.error("listenMqtt", "Please check your Facebook account and try again.");
+		}
 		mqttClient.end();
 		if (ctx.globalOptions.autoReconnect) {
 			// Add delay before reconnection to prevent rapid reconnection loops
@@ -200,6 +209,11 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 			jsonMessage = JSON.parse(jsonMessage);
 		}
 		catch (e) {
+			// Handle potential non-JSON responses gracefully
+			log.warn("listenMqtt", "Received non-JSON message on topic:", topic);
+			log.warn("listenMqtt", "Message content:", jsonMessage);
+			// Optionally, you could try to process this message differently if it's a known binary format
+			// For now, we'll treat it as an empty object to avoid further errors.
 			jsonMessage = {};
 		}
 
@@ -243,20 +257,20 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 				from: jsonMessage.sender_fbid.toString(),
 				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
 			};
-			
+
 			// Enhanced human behavior simulation
 			if (ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
 				// Simulate natural browsing activity
 				setInterval(() => {
 					if (Math.random() < 0.3) {
-						mqttClient.publish("/foreground_state", JSON.stringify({ 
+						mqttClient.publish("/foreground_state", JSON.stringify({
 							foreground: true,
 							last_interaction: Date.now(),
 							user_interaction: ctx.humanBehavior.simulateUserInteractions()
 						}), { qos: 1 });
 					}
 				}, 30000 + Math.random() * 60000);
-				
+
 				// Simulate periodic presence updates
 				setInterval(() => {
 					if (Math.random() < 0.2) {
@@ -347,13 +361,13 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
 					if (ctx.globalOptions.autoMarkDelivery) {
 						markDelivery(ctx, api, fmtMsg.threadID, fmtMsg.messageID);
 					}
-					
+
 					// Enhanced message formatting for new features
 					if (fmtMsg.type === "message") {
 						// Add read status
 						fmtMsg.isRead = false;
 						fmtMsg.isDelivered = true;
-						
+
 						// Add message source info
 						fmtMsg.platform = "messenger";
 						fmtMsg.source = v.delta.class;
@@ -955,7 +969,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 					log.error("listenMqtt", "2. Facebook may have changed their API format");
 					log.error("listenMqtt", "3. Network connectivity issues");
 					log.error("listenMqtt", "4. Cookie/session may have expired");
-					
+
 					// Try to provide helpful debugging info
 					if (error.errorDetails) {
 						log.error("listenMqtt", "Response details:", error.errorDetails);
@@ -1012,7 +1026,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 				listenMqtt(defaultFuncs, api, ctx, globalCallback);
 			}
 		};
-		
+
 		attemptConnection();
 
 		api.stopListening = msgEmitter.stopListening;
