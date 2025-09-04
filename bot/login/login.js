@@ -1,3 +1,4 @@
+
 // set bash title
 process.stdout.write("\x1b]2;Goat Bot V2 - Made by NTKhang\x1b\x5c");
 const defaultRequire = require;
@@ -31,7 +32,6 @@ async function getName(userID) {
 	}
 }
 
-
 function compareVersion(version1, version2) {
 	const v1 = version1.split(".");
 	const v2 = version2.split(".");
@@ -57,9 +57,7 @@ function centerText(text, length) {
 	const width = process.stdout.columns;
 	const leftPadding = Math.floor((width - (length || text.length)) / 2);
 	const rightPadding = width - leftPadding - (length || text.length);
-	// Build the padded string using the calculated padding values
 	const paddedString = ' '.repeat(leftPadding > 0 ? leftPadding : 0) + text + ' '.repeat(rightPadding > 0 ? rightPadding : 0);
-	// Print the padded string to the terminal
 	console.log(paddedString);
 }
 
@@ -163,13 +161,9 @@ async function input(prompt, isPassword = false) {
 
 	if (isPassword)
 		rl.input.on("keypress", function () {
-			// get the number of characters entered so far:
 			const len = rl.line.length;
-			// move cursor back to the beginning of the input:
 			readline.moveCursor(rl.output, -len, 0);
-			// clear everything to the right of the cursor:
 			readline.clearLine(rl.output, 1);
-			// replace the original input with asterisks:
 			for (let i = 0; i < len; i++) {
 				rl.output.write("*");
 			}
@@ -198,7 +192,6 @@ qr.readQrCode = async function (filePath) {
 };
 
 const { dirAccount } = global.client;
-// const { config, configCommands } = global.GoatBot;
 const { facebookAccount } = global.GoatBot.config;
 
 function responseUptimeSuccess(req, res) {
@@ -235,7 +228,6 @@ global.statusAccountBot = 'good';
 let changeFbStateByCode = false;
 let latestChangeContentAccount = fs.statSync(dirAccount).mtimeMs;
 let dashBoardIsRunning = false;
-
 
 async function getAppStateFromEmail(spin = { _start: () => { }, _stop: () => { } }, facebookAccount) {
 	const { email, password, userAgent, proxy } = facebookAccount;
@@ -355,7 +347,6 @@ function isNetScapeCookie(cookie) {
 	if (typeof cookie !== 'string')
 		return false;
 	return /(.+)\t(1|TRUE|true)\t([\w\/.-]*)\t(1|TRUE|true)\t\d+\t([\w-]+)\t(.+)/i.test(cookie);
-	// match
 }
 
 function netScapeToCookies(cookieData) {
@@ -449,7 +440,6 @@ async function getAppStateToLogin(loginWithEmail) {
 				(splitAccountText.length == 2 || splitAccountText.length == 3) &&
 				!splitAccountText.slice(0, 2).map(i => i.trim()).some(i => i.includes(' '))
 			) {
-				// Check if it's not just "[]" or similar invalid format
 				if (splitAccountText[0] !== "[" && splitAccountText[1] !== "]") {
 					global.GoatBot.config.facebookAccount.email = splitAccountText[0];
 					global.GoatBot.config.facebookAccount.password = splitAccountText[1];
@@ -697,19 +687,12 @@ function stopListening(keyListen) {
 	return new Promise((resolve) => {
 		global.GoatBot.fcaApi.stopListening?.(() => {
 			if (callbackListenTime[keyListen]) {
-				// callbackListenTime[keyListen || Object.keys(callbackListenTime).pop()]("Connection closed by user.");
 				callbackListenTime[keyListen] = () => { };
 			}
 			resolve();
 		}) || resolve();
 	});
 }
-
-// function removeListener(keyListen) {
-// 	keyListen = keyListen || Object.keys(callbackListenTime).pop();
-// 	if (callbackListenTime[keyListen])
-// 		callbackListenTime[keyListen] = () => { };
-// }
 
 async function startBot(loginWithEmail) {
 	console.log(colors.hex("#f5ab00")(createLine("START LOGGING IN", true)));
@@ -720,7 +703,6 @@ async function startBot(loginWithEmail) {
 		log.err("VERSION", getText('version', 'tooOldVersion', colors.yellowBright('node update')));
 		process.exit();
 	}
-	/* { CHECK ORIGIN CODE } */
 
 	if (global.GoatBot.Listening)
 		await stopListening();
@@ -813,6 +795,7 @@ async function startBot(loginWithEmail) {
 			log.info("PREFIX", global.GoatBot.config.prefix);
 			log.info("LANGUAGE", global.GoatBot.config.language);
 			log.info("BOT NICK NAME", global.GoatBot.config.nickNameBot || "GOAT BOT");
+
 			// ———————————————————— GBAN ————————————————————— //
 			let dataGban;
 
@@ -820,9 +803,6 @@ async function startBot(loginWithEmail) {
 				// convert to promise
 				const item = await axios.get("https://raw.githubusercontent.com/ntkhang03/Goat-Bot-V2-Gban/master/gban.json");
 				dataGban = item.data;
-
-
-
 
 				// ————————————————— CHECK BOT ————————————————— //
 				const botID = api.getCurrentUserID();
@@ -983,7 +963,6 @@ async function startBot(loginWithEmail) {
 			log.master("LOAD TIME", `${convertTime(Date.now() - global.GoatBot.startTime)}`);
 			logColor("#f5ab00", character);
 			// ——————————————————COPYRIGHT INFO —————————————————— //
-			// console.log(`\x1b[1m\x1b[33mCOPYRIGHT:\x1b[0m\x1b[1m\x1b[37m \x1b[0m\x1b[1m\x1b[36mProject GoatBot v2 created by ntkhang03 (https://github.com/ntkhang03), please do not sell this source code or claim it as your own. Thank you!\x1b[0m`);
 			console.log(`\x1b[1m\x1b[33m${("COPYRIGHT:")}\x1b[0m\x1b[1m\x1b[37m \x1b[0m\x1b[1m\x1b[36m${("Project GoatBot v2 created by ntkhang03 (https://github.com/ntkhang03), please do not sell this source code or claim it as your own. Thank you!")}\x1b[0m`);
 			logColor("#f5ab00", character);
 			global.GoatBot.config.adminBot = adminBot;
@@ -1030,32 +1009,6 @@ async function startBot(loginWithEmail) {
 				const configLog = global.GoatBot.config.logEvents;
 				if (isSendNotiErrorMessage == true)
 					isSendNotiErrorMessage = false;
-
-				// "whiteListMode": {
-				// 	"enable": false,
-				// 	"whiteListIds": [],
-				// 	"notes": "if you enable this feature, only the ids in the whiteListIds list can use the bot"
-				// },
-				// "whiteListModeThread": {
-				// 	"enable": false,
-				// 	"whiteListThreadIds": [],
-				// 	"notes": "if you enable this feature, only the thread in the whiteListThreadIds list can use the bot",
-				// 	"how_it_work": "if you enable both whiteListMode and whiteListModeThread, the system will check if the user is in whiteListIds, then check if the thread is in whiteListThreadIds, if one of the conditions is true, the user can use the bot"
-				// },
-
-				// "if you enable both whiteListMode and whiteListModeThread, the system will check if the user is in whiteListIds, then check if the thread is in whiteListThreadIds, if one of the conditions is true, the user can use the bot"
-				// const whitelistMode = config.whiteListMode?.enable === true;
-				// const whitelistModeThread = config.whiteListModeThread?.enable === true;
-				// const isWhitelistedSender = config.whiteListMode?.whiteListIds.includes(event.senderID);
-				// const isWhitelistedThread = config.whiteListModeThread?.whiteListThreadIds.includes(event.threadID);
-
-				// if (
-				// 	(whitelistMode && whitelistModeThread && !isWhitelistedSender && !isWhitelistedThread) ||
-				// 	(whitelistMode && !isWhitelistedSender) ||
-				// 	(whitelistModeThread && !isWhitelistedThread)
-				// ) {
-				// 	return;
-				// }
 
 				if (
 					global.GoatBot.config.whiteListMode?.enable == true
@@ -1169,7 +1122,6 @@ async function startBot(loginWithEmail) {
 				}
 			}
 
-
 			// ———————————————————— RESTART LISTEN ———————————————————— //
 			if (restartListenMqtt.enable == true) {
 				if (restartListenMqtt.logNoti == true) {
@@ -1205,9 +1157,7 @@ async function startBot(loginWithEmail) {
 				if (type == 'change' && changeFbStateByCode == false && latestChangeContentAccount != fs.statSync(dirAccount).mtimeMs) {
 					clearInterval(global.intervalRestartListenMqtt);
 					global.compulsoryStopLisening = true;
-					// await stopListening();
 					latestChangeContentAccount = fs.statSync(dirAccount).mtimeMs;
-					// process.exit(2);
 					startBot();
 				}
 			});
