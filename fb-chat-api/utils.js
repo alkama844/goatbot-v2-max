@@ -1339,59 +1339,70 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 					}
 				}
 
-				// Enhanced error handling for non-JSON responses
-				if (res.statusCode >= 300) {
-					return callback({
-						error: "Request to " + url + " failed with status " + res.statusCode + ". Response: " + body,
-						res: body
+				// Enhanced error handling for non-JSON responses with null safety
+				if (data && data.statusCode && data.statusCode >= 300) {
+					throw new CustomError({
+						message: "Request failed with status " + data.statusCode,
+						statusCode: data.statusCode,
+						res: body,
+						error: "Request failed with status " + data.statusCode + ". Response: " + (body ? body.substring(0, 500) : 'No response body'),
+						sourceCall: sourceCall
 					});
 				}
 
 				// Check if response is binary/compressed data
-				if (typeof body === 'string' && body.charCodeAt && body.charCodeAt(0) < 32) {
-					return callback({
-						error: "Received binary/compressed data instead of JSON. This usually indicates Facebook authentication issues or rate limiting.",
-						detail: new Error("Binary response detected"),
-						res: body.length > 100 ? body.substring(0, 100) + "..." : body,
-						errorDetails: {
-							originalError: "Binary response detected",
-							responseType: typeof body,
-							responseLength: body.length,
-							isBuffer: Buffer.isBuffer(body),
-							statusCode: res.statusCode,
-							contentType: res.headers['content-type']
-						}
-					});
+				if (typeof body === 'string' && body.length > 0) {
+					// Check for binary content using multiple methods
+					const isBinary = body.charCodeAt && (
+						body.charCodeAt(0) < 32 || 
+						/[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(body.substring(0, Math.min(100, body.length)))
+					);
+					
+					if (isBinary) {
+						throw new CustomError({
+							message: "Received binary/compressed data instead of JSON. This usually indicates Facebook authentication issues or rate limiting.",
+							detail: new Error("Binary response detected"),
+							res: body.length > 100 ? body.substring(0, 100) + "..." : body,
+							errorDetails: {
+								originalError: "Binary response detected",
+								responseType: typeof body,
+								responseLength: body.length,
+								isBuffer: Buffer.isBuffer(body),
+								statusCode: data?.statusCode || 'unknown',
+								contentType: data?.headers?.['content-type'] || 'unknown'
+							},
+							error: "BINARY_RESPONSE_RECEIVED",
+							sourceCall: sourceCall
+						});
+					}
 				}
 
 				res = JSON.parse(makeParsable(body));
 			} catch (e) {
-				// Enhanced error reporting for JSON parse failures
+				// Enhanced error details with null safety
 				const errorDetails = {
-					originalError: e.message,
+					originalError: e?.message || 'Unknown parsing error',
 					responseType: typeof body,
 					responseLength: body ? body.length : 0,
 					isBuffer: Buffer.isBuffer(body),
-					statusCode: data.statusCode,
-					contentType: data.headers ? data.headers['content-type'] : 'unknown'
+					statusCode: data?.statusCode || 'unknown',
+					contentType: data?.headers?.['content-type'] || 'unknown'
 				};
 
-				// Provide a sample of the response for debugging (first 200 chars)
-				let responseSample = '';
-				if (body) {
-					if (typeof body === 'string') {
-						responseSample = body.substring(0, 200);
-					} else if (Buffer.isBuffer(body)) {
-						responseSample = body.toString('hex').substring(0, 200);
+				// Check if response looks like compressed/binary data
+				if (body && typeof body === 'string' && body.length > 0) {
+					const isLikelyBinary = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(body);
+					if (isLikelyBinary) {
+						errorDetails.possibleCause = 'Response appears to be compressed or binary data';
 					}
 				}
 
 				throw new CustomError({
-					message: "JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.",
+					message: 'JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.',
 					detail: e,
-					res: responseSample + (body && (typeof body === 'string' ? body.length : body.length) > 200 ? "..." : ""),
-					errorDetails: errorDetails,
-					error: "JSON.parse error. Check the `detail` property on this error.",
+					res: body ? (body.length > 500 ? body.substring(0, 500) + "..." : body) : 'No response body',
+					errorDetails,
+					error: 'JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.',
 					sourceCall: sourceCall
 				});
 			}
