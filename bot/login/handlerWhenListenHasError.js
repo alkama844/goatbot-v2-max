@@ -105,6 +105,24 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		}
 	}
 
+	/* Handle specific error types */
+	if (error && error.error && error.error.includes("JSON.parse error")) {
+		log.warn("handlerWhenListenHasError", "JSON parse error detected - this usually indicates:");
+		log.warn("handlerWhenListenHasError", "1. Facebook account restrictions or rate limiting");
+		log.warn("handlerWhenListenHasError", "2. Temporary Facebook server issues");
+		log.warn("handlerWhenListenHasError", "3. Need to refresh authentication or cookies");
+		log.warn("handlerWhenListenHasError", "4. Account may need manual verification");
+		
+		// Additional suggestions for JSON parse errors
+		if (error.errorDetails) {
+			const details = error.errorDetails;
+			if (details.possibleCause) {
+				log.warn("handlerWhenListenHasError", `Possible cause: ${details.possibleCause}`);
+			}
+			log.warn("handlerWhenListenHasError", `Response type: ${details.responseType}, Length: ${details.responseLength}`);
+		}
+	}
+
 	/* AND YOU CAN CUSTOM YOUR CODE HERE */
 
 };
