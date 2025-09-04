@@ -120,7 +120,7 @@ function getHeaders(url, options, ctx, customHeader) {
 	if (ctx && ctx.region) {
 		headers["X-MSGR-Region"] = ctx.region;
 	}
-	
+
 	// Apply human behavior headers if enabled
 	if (ctx && ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
 		return ctx.humanBehavior.getAntiDetectionHeaders(headers);
@@ -671,7 +671,7 @@ function _formatAttachment(attachment1, attachment2) {
 				frameCount: blob.frame_count,
 				frameRate: blob.frame_rate,
 				framesPerRow: blob.frames_per_row,
-				framesPerCol: blob.frames_per_column,
+				framesPerColumn: blob.frames_per_column,
 
 				stickerID: blob.id, // @Legacy
 				spriteURI: blob.sprite_image, // @Legacy
@@ -1300,70 +1300,96 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 				});
 
 			let res = null;
+			let body = data.body; // Use a mutable variable for body
+
 			try {
 				// Check if response is binary/compressed data
-				if (Buffer.isBuffer(data.body)) {
+				if (Buffer.isBuffer(body)) {
 					// Try to decompress if it's gzipped
 					try {
 						const zlib = require('zlib');
-						const decompressed = zlib.gunzipSync(data.body);
-						data.body = decompressed.toString('utf8');
+						const decompressed = zlib.gunzipSync(body);
+						body = decompressed.toString('utf8');
 					} catch (decompressError) {
 						// If decompression fails, convert buffer to string
-						data.body = data.body.toString('utf8');
+						body = body.toString('utf8');
 					}
 				}
-				
+
 				// Clean the response body before parsing
-				let bodyToParse = data.body;
-				if (typeof bodyToParse === 'string') {
+				if (typeof body === 'string') {
 					// Remove any null bytes or control characters that might break JSON parsing
-					bodyToParse = bodyToParse.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, '');
-					
+					body = body.replace(/\x00/g, '').replace(/[\x00-\x1F\x7F]/g, '');
+
 					// Check if the response looks like HTML instead of JSON
-					if (bodyToParse.trim().startsWith('<')) {
+					if (body.trim().startsWith('<')) {
 						throw new CustomError({
 							message: "Received HTML response instead of JSON. This might indicate a login issue or Facebook blocking the request.",
 							statusCode: data.statusCode,
-							res: bodyToParse.substring(0, 500) + "...", // Truncate for readability
+							res: body.substring(0, 500) + "...", // Truncate for readability
 							error: "HTML_RESPONSE_RECEIVED",
 							sourceCall: sourceCall
 						});
 					}
-					
+
 					// Try to find JSON in the response if it's mixed content
-					const jsonMatch = bodyToParse.match(/\{.*\}/s);
+					const jsonMatch = body.match(/\{.*\}/s);
 					if (jsonMatch) {
-						bodyToParse = jsonMatch[0];
+						body = jsonMatch[0];
 					}
 				}
-				
-				res = JSON.parse(makeParsable(data.body));
+
+				// Enhanced error handling for non-JSON responses
+				if (res.statusCode >= 300) {
+					return callback({
+						error: "Request to " + url + " failed with status " + res.statusCode + ". Response: " + body,
+						res: body
+					});
+				}
+
+				// Check if response is binary/compressed data
+				if (typeof body === 'string' && body.charCodeAt && body.charCodeAt(0) < 32) {
+					return callback({
+						error: "Received binary/compressed data instead of JSON. This usually indicates Facebook authentication issues or rate limiting.",
+						detail: new Error("Binary response detected"),
+						res: body.length > 100 ? body.substring(0, 100) + "..." : body,
+						errorDetails: {
+							originalError: "Binary response detected",
+							responseType: typeof body,
+							responseLength: body.length,
+							isBuffer: Buffer.isBuffer(body),
+							statusCode: res.statusCode,
+							contentType: res.headers['content-type']
+						}
+					});
+				}
+
+				res = JSON.parse(makeParsable(body));
 			} catch (e) {
 				// Enhanced error reporting for JSON parse failures
 				const errorDetails = {
 					originalError: e.message,
-					responseType: typeof data.body,
-					responseLength: data.body ? data.body.length : 0,
-					isBuffer: Buffer.isBuffer(data.body),
+					responseType: typeof body,
+					responseLength: body ? body.length : 0,
+					isBuffer: Buffer.isBuffer(body),
 					statusCode: data.statusCode,
 					contentType: data.headers ? data.headers['content-type'] : 'unknown'
 				};
-				
+
 				// Provide a sample of the response for debugging (first 200 chars)
 				let responseSample = '';
-				if (data.body) {
-					if (Buffer.isBuffer(data.body)) {
-						responseSample = data.body.toString('hex').substring(0, 200);
-					} else {
-						responseSample = data.body.toString().substring(0, 200);
+				if (body) {
+					if (typeof body === 'string') {
+						responseSample = body.substring(0, 200);
+					} else if (Buffer.isBuffer(body)) {
+						responseSample = body.toString('hex').substring(0, 200);
 					}
 				}
-				
+
 				throw new CustomError({
 					message: "JSON.parse error. This usually indicates Facebook returned non-JSON data, possibly due to account issues or rate limiting.",
 					detail: e,
-					res: responseSample + (data.body && data.body.length > 200 ? "..." : ""),
+					res: responseSample + (body && (typeof body === 'string' ? body.length : body.length) > 200 ? "..." : ""),
 					errorDetails: errorDetails,
 					error: "JSON.parse error. Check the `detail` property on this error.",
 					sourceCall: sourceCall
@@ -1631,13 +1657,13 @@ function enhancedErrorHandler(error, context) {
 		timestamp: new Date().toISOString(),
 		userAgent: context?.globalOptions?.userAgent || "Unknown"
 	};
-	
+
 	// Log additional debugging info
 	if (error.response) {
 		enhancedError.statusCode = error.response.status;
 		enhancedError.responseHeaders = error.response.headers;
 	}
-	
+
 	return enhancedError;
 }
 
