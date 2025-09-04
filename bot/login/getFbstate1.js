@@ -38,6 +38,7 @@ async function checkAndSaveCookies(jar, headers, request) {
 		bodyText.includes('verify') ||
 		resHome.statusCode === 302 ||
 		resHome.statusCode === 401) {
+		console.log("Authentication check failed - redirected to login or security");
 		throw new Error("Authentication failed - redirected to login or security check");
 	}
 	
@@ -54,10 +55,12 @@ async function checkAndSaveCookies(jar, headers, request) {
 	if (userCookie) {
 		const userId = userCookie.value || userCookie.val;
 		if (userId && !resHome.body.includes(userId)) {
+			console.log("User ID not found in response");
 			throw new Error("User ID not found in response - authentication may have failed");
 		}
 	}
 	
+	console.log("Cookie validation successful");
 	return cookies;
 }
 
