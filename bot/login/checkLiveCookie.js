@@ -88,7 +88,7 @@ module.exports = async function (cookie, userAgent) {
 		const status = response.status;
 
 		// Check for definitive authentication failures
-		if (status === 401 || status === 403) {
+		if (status === 401 || status === 403 || status === 404) {
 			console.log("Authentication failed - HTTP", status);
 			return false;
 		}
@@ -158,12 +158,17 @@ module.exports = async function (cookie, userAgent) {
 			const status = e.response.status;
 			const responseText = (e.response.data || '').toString().toLowerCase();
 
+			console.log("Response status:", status);
+			console.log("Response length:", responseText.length);
+
 			// Check specific error responses
-			if (status === 401 || status === 403) {
+			if (status === 401 || status === 403 || status === 404) {
+				console.log("Definitive authentication failure - status", status);
 				return false; // Definitely invalid
 			}
 
 			if (responseText.includes('login') || responseText.includes('checkpoint') || responseText.includes('suspended')) {
+				console.log("Authentication failure detected in response content");
 				return false; // Definitely invalid
 			}
 		}
