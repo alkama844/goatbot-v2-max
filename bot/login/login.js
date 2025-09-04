@@ -469,65 +469,118 @@ async function getAppStateToLogin(loginWithEmail) {
 					appState = JSON.parse(accountText);
 				}
 				catch (err) {
-					const error = new Error(`${path.basename(dirAccount)} is invalid`);
+					spin && spin._stop();
+					log.err("LOGIN FACEBOOK", `Failed to parse ${path.basename(dirAccount)}: ${err.message}`);
+					const error = new Error(`${path.basename(dirAccount)} is invalid JSON format`);
 					error.name = "ACCOUNT_ERROR";
 					throw error;
 				}
-				if (appState.some(i => i.name))
-					appState = appState.map(i => {
-						i.key = i.name;
-						delete i.name;
-						return i;
-					});
-				else if (!appState.some(i => i.key)) {
-					const error = new Error(`${path.basename(dirAccount)} is invalid`);
+				
+				// Handle different cookie formats
+				if (Array.isArray(appState)) {
+					if (appState.some(i => i.name)) {
+						appState = appState.map(i => {
+							i.key = i.name;
+							delete i.name;
+							return i;
+						});
+					}
+					else if (!appState.some(i => i.key)) {
+						spin && spin._stop();
+						log.err("LOGIN FACEBOOK", "Cookie array is missing 'key' field in cookie objects");
+						const error = new Error(`${path.basename(dirAccount)} cookie format is invalid`);
+						error.name = "ACCOUNT_ERROR";
+						throw error;
+					}
+					
+					appState = appState
+						.map(item => ({
+							key: item.key,
+							value: item.value,
+							domain: item.domain || "facebook.com",
+							path: item.path || "/",
+							hostOnly: item.hostOnly !== undefined ? item.hostOnly : false,
+							creation: item.creation || new Date().toISOString(),
+							lastAccessed: item.lastAccessed || new Date().toISOString()
+						}))
+						.filter(i => i.key && i.value && i.key != "x-referer");
+				} else {
+					spin && spin._stop();
+					log.err("LOGIN FACEBOOK", "Cookie data must be an array");
+					const error = new Error(`${path.basename(dirAccount)} must contain an array of cookies`);
 					error.name = "ACCOUNT_ERROR";
 					throw error;
 				}
-				appState = appState
-					.map(item => ({
-						...item,
-						domain: "facebook.com",
-						path: "/",
-						hostOnly: false,
-						creation: new Date().toISOString(),
-						lastAccessed: new Date().toISOString()
-					}))
-					.filter(i => i.key && i.value && i.key != "x-referer");
 			}
-			// Enhanced cookie validation with retry logic
+			// Enhanced cookie validation with improved retry logic
 			let cookieValidationAttempts = 0;
 			const maxValidationAttempts = 3;
 			let cookieIsValid = false;
 			
+			// First check if cookie has essential components
+			const cookieString = appState.map(i => i.key + "=" + i.value).join("; ");
+			const hasEssentialCookies = cookieString.includes('c_user=') && 
+				cookieString.includes('xs=') && 
+				cookieString.includes('datr=');
+			
+			if (!hasEssentialCookies) {
+				log.err("LOGIN FACEBOOK", "Cookie is missing essential fields like c_user, xs, and datr.");
+				const error = new Error("Cookie is missing essential fields");
+				error.name = "COOKIE_INVALID";
+				throw error;
+			}
+			
 			while (cookieValidationAttempts < maxValidationAttempts && !cookieIsValid) {
 				try {
 					cookieValidationAttempts++;
-					const cookieString = appState.map(i => i.key + "=" + i.value).join("; ");
+					log.info("LOGIN FACEBOOK", `Validating cookie... (${cookieValidationAttempts}/${maxValidationAttempts})`);
+					
 					cookieIsValid = await checkLiveCookie(cookieString, facebookAccount.userAgent);
 					
-					if (!cookieIsValid) {
-						if (cookieValidationAttempts < maxValidationAttempts) {
-							log.warn("LOGIN FACEBOOK", `Cookie validation failed, retrying... (${cookieValidationAttempts}/${maxValidationAttempts})`);
-							await sleep(2000 * cookieValidationAttempts); // Progressive delay
-						}
+					if (!cookieIsValid && cookieValidationAttempts < maxValidationAttempts) {
+						log.warn("LOGIN FACEBOOK", `Cookie validation failed, retrying... (${cookieValidationAttempts}/${maxValidationAttempts})`);
+						await sleep(2000 * cookieValidationAttempts);
 					}
 				} catch (validationError) {
 					log.warn("LOGIN FACEBOOK", `Cookie validation error (attempt ${cookieValidationAttempts}):`, validationError.message);
+					
+					// Enhanced network error detection
+					const isNetworkError = validationError.code === 'ECONNRESET' || 
+						validationError.code === 'ETIMEDOUT' || 
+						validationError.code === 'ENOTFOUND' ||
+						validationError.code === 'ECONNREFUSED' ||
+						validationError.message.includes('timeout') ||
+						validationError.message.includes('network') ||
+						validationError.message.includes('socket') ||
+						validationError.message.includes('connect');
+					
+					if (isNetworkError) {
+						log.info("LOGIN FACEBOOK", "Network error during validation, skipping cookie check due to connectivity issues");
+						cookieIsValid = true;
+						break;
+					}
+					
+					// If it's the last attempt and not a network error, throw
 					if (cookieValidationAttempts >= maxValidationAttempts) {
-						const error = new Error("Cookie validation failed after multiple attempts");
+						const error = new Error(`Cookie validation failed after ${maxValidationAttempts} attempts: ${validationError.message}`);
 						error.name = "COOKIE_INVALID";
 						throw error;
 					}
-					await sleep(1000 * cookieValidationAttempts);
+					
+					await sleep(1500 * cookieValidationAttempts);
 				}
 			}
 			
 			if (!cookieIsValid) {
+				log.err("LOGIN FACEBOOK", "Cookie is invalid or expired. Please update your cookies in the account.txt file.");
+				log.err("LOGIN FACEBOOK", "Make sure your cookie contains essential fields like c_user, xs, and datr.");
+				log.err("LOGIN FACEBOOK", "You can get fresh cookies by logging into Facebook and exporting them using a browser extension.");
 				const error = new Error("Cookie is invalid or expired");
 				error.name = "COOKIE_INVALID";
 				throw error;
 			}
+			
+			log.info("LOGIN FACEBOOK", "Cookie validation successful");
 		}
 	}
 	catch (err) {
