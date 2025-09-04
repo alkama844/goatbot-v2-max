@@ -997,16 +997,16 @@ async function startBot(loginWithEmail) {
 			async function callBackListen(error, event) {
 				if (error) {
 					// Log the specific error type for debugging
-					console.log(chalk.red('MQTT Error Type:'), err.error || 'Unknown');
-					console.log(chalk.red('MQTT Error Details:'), err.errorDetails || 'No details');
+					console.log(chalk.red('MQTT Error Type:'), error.error || 'Unknown');
+					console.log(chalk.red('MQTT Error Details:'), error.errorDetails || 'No details');
 
-					if (err.error === "Connection closed." && global.GoatBot.config.autoReLogin) {
+					if (error.error === "Connection closed." && global.GoatBot.config.autoReLogin) {
 						console.log(chalk.yellow(`›`) + ` auto re-login...`);
 						return global.GoatBot.reLoginBot();
 					}
 
 					// Handle JSON parse errors specifically
-					if (err.error && err.error.includes("JSON.parse error")) {
+					if (error.error && error.error.includes("JSON.parse error")) {
 						console.log(chalk.yellow('Warning: Facebook returned non-JSON data. This may indicate:'));
 						console.log(chalk.yellow('- Account restrictions or rate limiting'));
 						console.log(chalk.yellow('- Temporary Facebook server issues'));
@@ -1022,7 +1022,7 @@ async function startBot(loginWithEmail) {
 					}
 
 					return require("./handlerWhenListenHasError.js")({
-						api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, error: err
+						api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, error: error
 					});
 				}
 				global.responseUptimeCurrent = responseUptimeSuccess;
