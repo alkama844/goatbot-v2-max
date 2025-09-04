@@ -19,6 +19,7 @@ const login = defaultRequire(`${process.cwd()}/fb-chat-api`);
 const qr = new (defaultRequire("qrcode-reader"));
 const Canvas = defaultRequire("canvas");
 const https = defaultRequire("https");
+const chalk = defaultRequire("chalk");
 
 async function getName(userID) {
 	try {
