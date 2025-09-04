@@ -1427,30 +1427,7 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 function checkLiveCookie(ctx, defaultFuncs) {
 	// Simplified validation for better reliability
-	return Promise.resolve(true); 
-					
-				if (err.error === "Not logged in." || err.message === "Not logged in.") {
-					throw err;
-				}
-				
-				// Enhanced error handling for network issues
-				if (err.code === 'ECONNRESET' || 
-					err.code === 'ETIMEDOUT' || 
-					err.code === 'ENOTFOUND' ||
-					err.code === 'ECONNREFUSED' ||
-					err.message.includes('timeout') ||
-					err.message.includes('network') ||
-					err.message.includes('socket')) {
-					console.log(`Network error on ${endpoints[index]}, trying next endpoint...`);
-					return tryEndpoint(index + 1);
-				}
-				
-				console.log(`Error on ${endpoints[index]}:`, err.message, "- trying next endpoint...");
-				return tryEndpoint(index + 1);
-			});
-	};
-	
-	return tryEndpoint(0);
+	return Promise.resolve(true);
 }
 
 function saveCookies(jar) {
