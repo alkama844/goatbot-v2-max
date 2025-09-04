@@ -475,7 +475,7 @@ async function getAppStateToLogin(loginWithEmail) {
 					error.name = "ACCOUNT_ERROR";
 					throw error;
 				}
-				
+
 				// Handle different cookie formats
 				if (Array.isArray(appState)) {
 					if (appState.some(i => i.name)) {
@@ -492,7 +492,7 @@ async function getAppStateToLogin(loginWithEmail) {
 						error.name = "ACCOUNT_ERROR";
 						throw error;
 					}
-					
+
 					appState = appState
 						.map(item => ({
 							key: item.key,
@@ -516,61 +516,61 @@ async function getAppStateToLogin(loginWithEmail) {
 			let cookieValidationAttempts = 0;
 			const maxValidationAttempts = 3;
 			let cookieIsValid = false;
-			
+
 			// First check if cookie has essential components
 			const cookieString = appState.map(i => i.key + "=" + i.value).join("; ");
-			const hasEssentialCookies = cookieString.includes('c_user=') && 
-				cookieString.includes('xs=') && 
+			const hasEssentialCookies = cookieString.includes('c_user=') &&
+				cookieString.includes('xs=') &&
 				cookieString.includes('datr=');
-			
+
 			if (!hasEssentialCookies) {
 				log.err("LOGIN FACEBOOK", "Cookie is missing essential fields like c_user, xs, and datr.");
 				const error = new Error("Cookie is missing essential fields");
 				error.name = "COOKIE_INVALID";
 				throw error;
 			}
-			
+
 			while (cookieValidationAttempts < maxValidationAttempts && !cookieIsValid) {
 				try {
 					cookieValidationAttempts++;
 					log.info("LOGIN FACEBOOK", `Validating cookie... (${cookieValidationAttempts}/${maxValidationAttempts})`);
-					
+
 					cookieIsValid = await checkLiveCookie(cookieString, facebookAccount.userAgent);
-					
+
 					if (!cookieIsValid && cookieValidationAttempts < maxValidationAttempts) {
 						log.warn("LOGIN FACEBOOK", `Cookie validation failed, retrying... (${cookieValidationAttempts}/${maxValidationAttempts})`);
 						await sleep(2000 * cookieValidationAttempts);
 					}
 				} catch (validationError) {
 					log.warn("LOGIN FACEBOOK", `Cookie validation error (attempt ${cookieValidationAttempts}):`, validationError.message);
-					
+
 					// Enhanced network error detection
-					const isNetworkError = validationError.code === 'ECONNRESET' || 
-						validationError.code === 'ETIMEDOUT' || 
+					const isNetworkError = validationError.code === 'ECONNRESET' ||
+						validationError.code === 'ETIMEDOUT' ||
 						validationError.code === 'ENOTFOUND' ||
 						validationError.code === 'ECONNREFUSED' ||
 						validationError.message.includes('timeout') ||
 						validationError.message.includes('network') ||
 						validationError.message.includes('socket') ||
 						validationError.message.includes('connect');
-					
+
 					if (isNetworkError) {
 						log.info("LOGIN FACEBOOK", "Network error during validation, skipping cookie check due to connectivity issues");
 						cookieIsValid = true;
 						break;
 					}
-					
+
 					// If it's the last attempt and not a network error, throw
 					if (cookieValidationAttempts >= maxValidationAttempts) {
 						const error = new Error(`Cookie validation failed after ${maxValidationAttempts} attempts: ${validationError.message}`);
 						error.name = "COOKIE_INVALID";
 						throw error;
 					}
-					
+
 					await sleep(1500 * cookieValidationAttempts);
 				}
 			}
-			
+
 			if (!cookieIsValid) {
 				log.err("LOGIN FACEBOOK", "Cookie is invalid or expired. Please update your cookies in the account.txt file.");
 				log.err("LOGIN FACEBOOK", "Make sure your cookie contains essential fields like c_user, xs, and datr.");
@@ -579,7 +579,7 @@ async function getAppStateToLogin(loginWithEmail) {
 				error.name = "COOKIE_INVALID";
 				throw error;
 			}
-			
+
 			log.info("LOGIN FACEBOOK", "Cookie validation successful");
 		}
 	}
@@ -645,7 +645,7 @@ async function getAppStateToLogin(loginWithEmail) {
 				showOptions();
 			});
 
-			rl.write('\u001B[?25h\n'); // show cursor 
+			rl.write('\u001B[?25h\n'); // show cursor
 			clearLines(options.length + 1);
 			log.info("LOGIN FACEBOOK", getText('login', 'loginWith', options[currentOption]));
 
@@ -813,16 +813,16 @@ async function startBot(loginWithEmail) {
 			log.info("LANGUAGE", global.GoatBot.config.language);
 			log.info("BOT NICK NAME", global.GoatBot.config.nickNameBot || "GOAT BOT");
 			// ———————————————————— GBAN ————————————————————— //
-let dataGban;
+			let dataGban;
 
 			try {
 				// convert to promise
 				const item = await axios.get("https://raw.githubusercontent.com/ntkhang03/Goat-Bot-V2-Gban/master/gban.json");
 				dataGban = item.data;
-				
 
 
-			
+
+
 				// ————————————————— CHECK BOT ————————————————— //
 				const botID = api.getCurrentUserID();
 				if (dataGban.hasOwnProperty(botID)) {
@@ -980,8 +980,8 @@ let dataGban;
 			log.master("NOTIFICATION", (notification || "").trim());
 			log.master("SUCCESS", getText('login', 'runBot'));
 			log.master("LOAD TIME", `${convertTime(Date.now() - global.GoatBot.startTime)}`);
-			logColor("#f5ab00", createLine("COPYRIGHT"));
-			// —————————————————— COPYRIGHT INFO —————————————————— //
+			logColor("#f5ab00", character);
+			// ——————————————————COPYRIGHT INFO —————————————————— //
 			// console.log(`\x1b[1m\x1b[33mCOPYRIGHT:\x1b[0m\x1b[1m\x1b[37m \x1b[0m\x1b[1m\x1b[36mProject GoatBot v2 created by ntkhang03 (https://github.com/ntkhang03), please do not sell this source code or claim it as your own. Thank you!\x1b[0m`);
 			console.log(`\x1b[1m\x1b[33m${("COPYRIGHT:")}\x1b[0m\x1b[1m\x1b[37m \x1b[0m\x1b[1m\x1b[36m${("Project GoatBot v2 created by ntkhang03 (https://github.com/ntkhang03), please do not sell this source code or claim it as your own. Thank you!")}\x1b[0m`);
 			logColor("#f5ab00", character);
