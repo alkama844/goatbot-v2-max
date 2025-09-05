@@ -1309,6 +1309,8 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 						possibleCause: 'Account cookies expired, account restricted, or Facebook changed response format',
 						solution: 'Please refresh your Facebook cookies (appState) using !getfbstate command',
 						error: 'BINARY_RESPONSE_ERROR',
+						statusCode: data.statusCode,
+						isBinaryResponse: true,
 						sourceCall: sourceCall
 					});
 				}
@@ -1324,15 +1326,17 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 				// Log more details about the parsing error
 				const bodyPreview = data.body ? data.body.substring(0, 200) + '...' : 'No body';
 				const isBinary = data.body && typeof data.body === 'string' && /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(data.body);
+				const isCompressed = data.body && typeof data.body === 'string' && data.body.charCodeAt(0) === 0x1F && data.body.charCodeAt(1) === 0x8B;
 
 				throw new CustomError({
-					message: isBinary ? 'Facebook returned binary data instead of JSON' : 'JSON.parse error.',
+					message: isBinary || isCompressed ? 'Facebook returned binary/compressed data instead of JSON' : 'JSON.parse error.',
 					detail: e,
 					res: data.body,
 					bodyPreview: bodyPreview,
 					responseType: typeof data.body,
 					responseLength: data.body ? data.body.length : 0,
-					isBinaryResponse: isBinary,
+					isBinaryResponse: isBinary || isCompressed,
+					statusCode: data.statusCode,
 					possibleCause: isBinary ?
 						'Facebook account cookies expired or account restricted' :
 						'Facebook returned malformed JSON response',
