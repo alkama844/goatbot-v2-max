@@ -1,4 +1,3 @@
-
 /* eslint-disable no-prototype-builtins */
 "use strict";
 
@@ -672,7 +671,7 @@ function _formatAttachment(attachment1, attachment2) {
 				frameCount: blob.frame_count,
 				frameRate: blob.frame_rate,
 				framesPerRow: blob.frames_per_row,
-				framesPerColumn: blob.frames_per_column,
+				framesPerColumn: blob.frames_per_col,
 
 				stickerID: blob.id, // @Legacy
 				spriteURI: blob.sprite_image, // @Legacy
@@ -1155,7 +1154,7 @@ function makeDefaults(html, userID, ctx) {
 	const revision = getFrom(html, 'revision":', ",");
 
 	function mergeWithDefaults(obj) {
-		// @TODO This is missing a key called __dyn.
+		// @TODO this is missing a key called __dyn.
 		// After some investigation it seems like __dyn is some sort of set that FB
 		// calls BitMap. It seems like certain responses have a "define" key in the
 		// res.jsmods arrays. I think the code iterates over those and calls `set`
@@ -1265,7 +1264,7 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 				);
 				const url =
 					data.request.uri.protocol +
-					"//" +
+					"://" +
 					data.request.uri.hostname +
 					data.request.uri.pathname;
 				if (
@@ -1302,12 +1301,44 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 
 			let res = null;
 			try {
-				res = JSON.parse(makeParsable(data.body));
+				// Check if response contains binary data
+				if (typeof data.body === 'string' && data.body.includes('\x00')) {
+					throw new CustomError({
+						message: 'Facebook returned binary/compressed data instead of JSON',
+						detail: 'This usually indicates expired cookies or account restrictions',
+						possibleCause: 'Account cookies expired, account restricted, or Facebook changed response format',
+						solution: 'Please refresh your Facebook cookies (appState) using !getfbstate command',
+						error: 'BINARY_RESPONSE_ERROR',
+						sourceCall: sourceCall
+					});
+				}
+
+				const parsableData = makeParsable(data.body);
+				res = JSON.parse(parsableData);
 			} catch (e) {
+				// Check if it's our custom binary error
+				if (e instanceof CustomError && e.error === 'BINARY_RESPONSE_ERROR') {
+					throw e;
+				}
+
+				// Log more details about the parsing error
+				const bodyPreview = data.body ? data.body.substring(0, 200) + '...' : 'No body';
+				const isBinary = data.body && typeof data.body === 'string' && /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(data.body);
+
 				throw new CustomError({
-					message: 'JSON.parse error.',
+					message: isBinary ? 'Facebook returned binary data instead of JSON' : 'JSON.parse error.',
 					detail: e,
 					res: data.body,
+					bodyPreview: bodyPreview,
+					responseType: typeof data.body,
+					responseLength: data.body ? data.body.length : 0,
+					isBinaryResponse: isBinary,
+					possibleCause: isBinary ?
+						'Facebook account cookies expired or account restricted' :
+						'Facebook returned malformed JSON response',
+					solution: isBinary ?
+						'Refresh your Facebook cookies using !getfbstate command' :
+						'Check if your Facebook account is accessible',
 					error: 'JSON.parse error.',
 					sourceCall: sourceCall
 				});
