@@ -7,14 +7,14 @@ const axios = require("axios");
  */
 module.exports = async function (cookie, userAgent) {
 	try {
-		// Add more robust headers to avoid detection
+		// Enhanced headers with better anti-detection
 		const headers = {
 			cookie,
-			"user-agent": userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+			"user-agent": userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
 			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 			"accept-language": "en-US,en;q=0.9",
 			"accept-encoding": "gzip, deflate, br",
-			"sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+			"sec-ch-ua": '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
 			"sec-ch-ua-mobile": "?0",
 			"sec-ch-ua-platform": '"Windows"',
 			"sec-fetch-dest": "document",
@@ -22,45 +22,85 @@ module.exports = async function (cookie, userAgent) {
 			"sec-fetch-site": "none",
 			"sec-fetch-user": "?1",
 			"upgrade-insecure-requests": "1",
-			"cache-control": "max-age=0"
+			"cache-control": "max-age=0",
+			"pragma": "no-cache"
 		};
 		
 		const response = await axios({
-			url: 'https://mbasic.facebook.com/',
+			url: 'https://m.facebook.com/',
 			method: "GET",
 			headers,
-			timeout: 15000,
+			timeout: 20000,
 			maxRedirects: 3,
+			decompress: true,
 			validateStatus: function (status) {
-				return status < 500; // Accept any status code less than 500
+				return status < 500;
 			}
 		});
 		
-		// More comprehensive validation
+		// Enhanced validation with better detection
 		const body = response.data.toLowerCase();
-		const isLoggedIn = body.includes('home.php') || 
-			body.includes('timeline') || 
-			body.includes('newsfeed') ||
-			body.includes('fb_dtsg') ||
-			body.includes('__user') ||
-			body.includes('profile.php') ||
-			!body.includes('login');
+		
+		// Check for positive authentication indicators
+		const positiveIndicators = [
+			'home.php', 'timeline', 'newsfeed', 'fb_dtsg', '__user', 
+			'profile.php', 'messenger', 'notifications', 'menu'
+		];
+		const hasPositiveIndicator = positiveIndicators.some(indicator => body.includes(indicator));
+		
+		// Check for negative indicators (login/error pages)
+		const negativeIndicators = [
+			'login', 'checkpoint', 'security', 'verify your identity', 
+			'account disabled', 'suspended', 'blocked', 'restricted'
+		];
+		const hasNegativeIndicator = negativeIndicators.some(indicator => body.includes(indicator));
 			
-		// Check for specific error indicators
-		const hasErrors = body.includes('checkpoint') || 
-			body.includes('security') ||
-			body.includes('verify your identity') ||
-			body.includes('account disabled') ||
-			response.status === 404;
+		// Additional checks
+		const isError404 = response.status === 404;
+		const isRedirect = response.status >= 300 && response.status < 400;
+		const bodyTooShort = body.length < 1000; // Suspicious if too short
 			
-		return isLoggedIn && !hasErrors;
+		// Determine if logged in
+		const isLoggedIn = hasPositiveIndicator && !hasNegativeIndicator && !isError404 && !bodyTooShort;
+		
+		if (!isLoggedIn) {
+			console.log("🚨 Cookie validation failed:");
+			console.log(`   Status: ${response.status}`);
+			console.log(`   Body length: ${body.length}`);
+			console.log(`   Has positive indicators: ${hasPositiveIndicator}`);
+			console.log(`   Has negative indicators: ${hasNegativeIndicator}`);
+			console.log(`   Is redirect: ${isRedirect}`);
+		}
+		
+		return isLoggedIn;
 	}
 	catch (e) {
-		// Network errors should not be treated as invalid cookies
-		if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT' || e.code === 'ENOTFOUND') {
-			log.warn("checkLiveCookie", "Network error during cookie validation:", e.message);
-			return true; // Assume cookies are valid if we can't check due to network issues
+		// Enhanced network error handling
+		const networkErrorCodes = [
+			'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED', 
+			'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN', 'ECONNABORTED'
+		];
+		
+		if (networkErrorCodes.includes(e.code)) {
+			console.log("⚠️ Network error during cookie validation:", e.message);
+			console.log("🔄 Assuming cookies are valid due to network issues");
+			return true;
 		}
+		
+		// Handle specific HTTP errors
+		if (e.response) {
+			const status = e.response.status;
+			if (status === 404 || status === 403) {
+				console.log("🚨 HTTP", status, "- Authentication failed");
+				return false;
+			}
+			if (status >= 500) {
+				console.log("⚠️ Facebook server error:", status);
+				return true; // Server error, assume cookies are valid
+			}
+		}
+		
+		console.log("❌ Cookie validation error:", e.message);
 		return false;
 	}
 };
