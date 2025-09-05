@@ -107,48 +107,49 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 
 	/* Handle specific error types */
 	if (error && (error.type === "auth_failed" || error.type === "auth_error")) {
-		log.err("AUTHENTICATION", "Facebook authentication failed permanently");
-		log.err("CAUSE", "Your Facebook session has expired or account is restricted");
-		log.err("SOLUTION", "Please get fresh Facebook cookies from your browser");
-		log.err("STEPS", "1. Login to Facebook in your browser");
-		log.err("STEPS", "2. Use a cookie extension to export cookies");
-		log.err("STEPS", "3. Update account.txt with fresh cookie data");
-		log.err("STEPS", "4. Restart the bot");
+		log.err("AUTHENTICATION", "🚨 Facebook authentication failed permanently");
+		log.err("CAUSE", "📋 Your Facebook session has expired or account is restricted");
+		log.err("SOLUTION", "🔧 Please get fresh Facebook cookies from your browser");
+		log.err("STEPS", "📝 1. Login to Facebook in your browser");
+		log.err("STEPS", "🍪 2. Use a cookie extension to export cookies");
+		log.err("STEPS", "📄 3. Update account.txt with fresh cookie data");
+		log.err("STEPS", "🔄 4. Restart the bot");
+		log.err("STEPS", "🤖 5. Or use !getfbstate command for automated refresh");
 		return;
 	}
 	
 	if (error && error.error && error.error.includes("JSON.parse error")) {
-		log.err("handlerWhenListenHasError", "JSON parse error detected - Facebook returned invalid response format");
+		log.err("handlerWhenListenHasError", "🚨 JSON parse error detected - Facebook returned invalid response format");
 
 		if (error.isBinaryData) {
-			log.err("handlerWhenListenHasError", "Facebook returned binary/compressed data instead of JSON");
-			log.warn("handlerWhenListenHasError", "This strongly indicates:");
-			log.warn("handlerWhenListenHasError", "1. Your Facebook account is restricted or temporarily banned");
-			log.warn("handlerWhenListenHasError", "2. Facebook cookies/session have expired");
-			log.warn("handlerWhenListenHasError", "3. Facebook's anti-bot detection is active");
-			log.warn("handlerWhenListenHasError", "4. Your account needs verification or security check");
+			log.err("handlerWhenListenHasError", "📊 Facebook returned binary/compressed data instead of JSON");
+			log.warn("handlerWhenListenHasError", "📋 This strongly indicates:");
+			log.warn("handlerWhenListenHasError", "   1. Your Facebook account is restricted or temporarily banned");
+			log.warn("handlerWhenListenHasError", "   2. Facebook cookies/session have expired");
+			log.warn("handlerWhenListenHasError", "   3. Facebook's anti-bot detection is active");
+			log.warn("handlerWhenListenHasError", "   4. Your account needs verification or security check");
 		} else {
-			log.warn("handlerWhenListenHasError", "This usually indicates:");
-			log.warn("handlerWhenListenHasError", "1. Facebook account restrictions or rate limiting");
-			log.warn("handlerWhenListenHasError", "2. Temporary Facebook server issues");
-			log.warn("handlerWhenListenHasError", "3. Need to refresh authentication or cookies");
-			log.warn("handlerWhenListenHasError", "4. Account may need manual verification");
+			log.warn("handlerWhenListenHasError", "📋 This usually indicates:");
+			log.warn("handlerWhenListenHasError", "   1. Facebook account restrictions or rate limiting");
+			log.warn("handlerWhenListenHasError", "   2. Temporary Facebook server issues");
+			log.warn("handlerWhenListenHasError", "   3. Need to refresh authentication or cookies");
+			log.warn("handlerWhenListenHasError", "   4. Account may need manual verification");
 		}
 
 		log.warn("handlerWhenListenHasError", "");
-		log.warn("handlerWhenListenHasError", "IMMEDIATE ACTIONS:");
-		log.warn("handlerWhenListenHasError", "1. Login to Facebook manually and check for any security alerts");
-		log.warn("handlerWhenListenHasError", "2. Complete any required verifications or security checks");
-		log.warn("handlerWhenListenHasError", "3. Get fresh cookies from your browser after manual login");
-		log.warn("handlerWhenListenHasError", "4. Update account.txt with new cookie data");
-		log.warn("handlerWhenListenHasError", "5. Use !getfbstate command to generate fresh credentials");
+		log.warn("handlerWhenListenHasError", "🔧 IMMEDIATE ACTIONS:");
+		log.warn("handlerWhenListenHasError", "   1. Login to Facebook manually and check for any security alerts");
+		log.warn("handlerWhenListenHasError", "   2. Complete any required verifications or security checks");
+		log.warn("handlerWhenListenHasError", "   3. Get fresh cookies from your browser after manual login");
+		log.warn("handlerWhenListenHasError", "   4. Update account.txt with new cookie data");
+		log.warn("handlerWhenListenHasError", "   5. Use !getfbstate command to generate fresh credentials");
 
 		// Additional suggestions for JSON parse errors
 		if (error.solutions && Array.isArray(error.solutions)) {
 			log.warn("handlerWhenListenHasError", "");
-			log.warn("handlerWhenListenHasError", "Additional solutions:");
+			log.warn("handlerWhenListenHasError", "💡 Additional solutions:");
 			error.solutions.forEach((solution, index) => {
-				log.warn("handlerWhenListenHasError", `${index + 1}. ${solution}`);
+				log.warn("handlerWhenListenHasError", `   ${index + 1}. ${solution}`);
 			});
 		}
 		return;
@@ -156,51 +157,51 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 
 	/* Handle 404 errors from parseAndCheckLogin */
 	if (error && (error.error || error.message || "").includes("parseAndCheckLogin got status code: 404")) {
-		log.err("handlerWhenListenHasError", "Facebook authentication failed with 404 error");
-		log.warn("handlerWhenListenHasError", "This indicates:");
-		log.warn("handlerWhenListenHasError", "1. Facebook session has expired or invalid fbstate");
-		log.warn("handlerWhenListenHasError", "2. Account credentials are no longer valid");
-		log.warn("handlerWhenListenHasError", "3. Facebook has detected suspicious activity");
-		log.warn("handlerWhenListenHasError", "4. Account may be temporarily restricted");
-		log.warn("handlerWhenListenHasError", "5. Facebook endpoint changes or server issues");
+		log.err("handlerWhenListenHasError", "🚨 Facebook authentication failed with 404 error");
+		log.warn("handlerWhenListenHasError", "📋 This indicates:");
+		log.warn("handlerWhenListenHasError", "   1. Facebook session has expired or invalid fbstate");
+		log.warn("handlerWhenListenHasError", "   2. Account credentials are no longer valid");
+		log.warn("handlerWhenListenHasError", "   3. Facebook has detected suspicious activity");
+		log.warn("handlerWhenListenHasError", "   4. Account may be temporarily restricted");
+		log.warn("handlerWhenListenHasError", "   5. Facebook endpoint changes or server issues");
 		log.warn("handlerWhenListenHasError", "");
-		log.warn("handlerWhenListenHasError", "SOLUTIONS:");
-		log.warn("handlerWhenListenHasError", "1. Get fresh fbstate from your browser cookies");
-		log.warn("handlerWhenListenHasError", "2. Use getfbstate command to generate new credentials");
-		log.warn("handlerWhenListenHasError", "3. Check if your Facebook account is accessible");
-		log.warn("handlerWhenListenHasError", "4. Wait a few minutes and try again");
-		log.warn("handlerWhenListenHasError", "5. Update account.txt with fresh credentials");
-		log.warn("handlerWhenListenHasError", "6. Try logging into Facebook manually first");
+		log.warn("handlerWhenListenHasError", "🔧 SOLUTIONS:");
+		log.warn("handlerWhenListenHasError", "   1. Get fresh fbstate from your browser cookies");
+		log.warn("handlerWhenListenHasError", "   2. Use !getfbstate command to generate new credentials");
+		log.warn("handlerWhenListenHasError", "   3. Check if your Facebook account is accessible");
+		log.warn("handlerWhenListenHasError", "   4. Wait a few minutes and try again");
+		log.warn("handlerWhenListenHasError", "   5. Update account.txt with fresh credentials");
+		log.warn("handlerWhenListenHasError", "   6. Try logging into Facebook manually first");
 
 		// Don't auto-retry 404 errors as they indicate authentication issues
-		log.err("handlerWhenListenHasError", "Stopping auto-retry for 404 errors to prevent spam");
-		log.err("handlerWhenListenHasError", "Please manually fix the authentication issue");
+		log.err("handlerWhenListenHasError", "🛑 Stopping auto-retry for 404 errors to prevent spam");
+		log.err("handlerWhenListenHasError", "🔧 Please manually fix the authentication issue");
 		return;
 	}
 
 	/* Handle getSeqId errors */
 	if (error && typeof error.sourceCall === 'string' && error.sourceCall.includes("getSeqId")) {
-		log.err("handlerWhenListenHasError", "getSeqId error detected - connection to Facebook failed");
-		log.warn("handlerWhenListenHasError", "This is usually caused by:");
-		log.warn("handlerWhenListenHasError", "1. Invalid or expired Facebook session");
-		log.warn("handlerWhenListenHasError", "2. Facebook server maintenance");
-		log.warn("handlerWhenListenHasError", "3. Network connectivity issues");
-		log.warn("handlerWhenListenHasError", "4. Account restrictions or bans");
+		log.err("handlerWhenListenHasError", "🚨 getSeqId error detected - connection to Facebook failed");
+		log.warn("handlerWhenListenHasError", "📋 This is usually caused by:");
+		log.warn("handlerWhenListenHasError", "   1. Invalid or expired Facebook session");
+		log.warn("handlerWhenListenHasError", "   2. Facebook server maintenance");
+		log.warn("handlerWhenListenHasError", "   3. Network connectivity issues");
+		log.warn("handlerWhenListenHasError", "   4. Account restrictions or bans");
 	}
 
 	// Handle binary response errors specifically
 	if (error && error.error === 'BINARY_RESPONSE_ERROR') {
-		log.err("FACEBOOK API", "Facebook returned binary data instead of JSON");
-		log.err("SOLUTION", "Your Facebook cookies have expired or account is restricted");
-		log.err("ACTION NEEDED", "Please get fresh Facebook cookies using: !getfbstate");
+		log.err("FACEBOOK API", "🚨 Facebook returned binary data instead of JSON");
+		log.err("SOLUTION", "🔧 Your Facebook cookies have expired or account is restricted");
+		log.err("ACTION NEEDED", "🤖 Please get fresh Facebook cookies using: !getfbstate");
 		return;
 	}
 
 	// Handle JSON parse errors with binary data
 	if (error && error.error === 'JSON.parse error.' && error.isBinaryResponse) {
-		log.err("FACEBOOK API", "Facebook returned binary/compressed data");
-		log.err("CAUSE", "Account cookies expired or Facebook changed response format");
-		log.err("SOLUTION", "Get fresh Facebook cookies using: !getfbstate command");
+		log.err("FACEBOOK API", "🚨 Facebook returned binary/compressed data");
+		log.err("CAUSE", "📋 Account cookies expired or Facebook changed response format");
+		log.err("SOLUTION", "🤖 Get fresh Facebook cookies using: !getfbstate command");
 		return;
 	}
 
