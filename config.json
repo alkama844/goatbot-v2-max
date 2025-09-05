@@ -97,7 +97,6 @@
   "autoRefreshFbstate": false,
   "autoReloginWhenChangeAccount": false,
   "autoRestartWhenListenMqttError": false,
-  "autoReLogin": true,
   "restartListenMqtt": {
     "enable": true,
     "timeRestart": 3600000,
