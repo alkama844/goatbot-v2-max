@@ -515,35 +515,42 @@ async function getAppStateToLogin(loginWithEmail) {
 				cookieString.includes('datr=');
 
 			if (!hasEssentialCookies) {
-				log.err("LOGIN FACEBOOK", "Cookie is missing essential fields like c_user, xs, and datr.");
-				log.err("LOGIN FACEBOOK", "Current cookie keys:", appState.map(i => i.key).join(', '));
+				log.err("LOGIN FACEBOOK", "🚨 Cookie is missing essential fields");
+				log.err("LOGIN FACEBOOK", "📋 Required fields: c_user, xs, datr");
+				log.err("LOGIN FACEBOOK", "📋 Current cookie keys:", appState.map(i => i.key).join(', '));
+				log.err("LOGIN FACEBOOK", "");
+				log.err("LOGIN FACEBOOK", "🔧 SOLUTIONS:");
+				log.err("LOGIN FACEBOOK", "   1. Login to Facebook in your browser");
+				log.err("LOGIN FACEBOOK", "   2. Use a cookie extension to export ALL cookies");
+				log.err("LOGIN FACEBOOK", "   3. Make sure to include c_user, xs, and datr fields");
+				log.err("LOGIN FACEBOOK", "   4. Update account.txt with complete cookie data");
 				const error = new Error("Cookie is missing essential fields");
 				error.name = "COOKIE_INVALID";
 				throw error;
 			}
 
-			log.info("LOGIN FACEBOOK", "Essential cookie fields found, proceeding with validation...");
+			log.info("LOGIN FACEBOOK", "✅ Essential cookie fields found, proceeding with validation...");
 
 			// Skip validation in development or if explicitly disabled
 			if (process.env.NODE_ENV === 'development' || global.GoatBot.config.skipCookieValidation) {
-				log.info("LOGIN FACEBOOK", "Cookie validation skipped - proceeding with login");
+				log.info("LOGIN FACEBOOK", "⏭️ Cookie validation skipped - proceeding with login");
 				cookieIsValid = true;
 			} else {
 			while (cookieValidationAttempts < maxValidationAttempts && !cookieIsValid) {
 				try {
 					cookieValidationAttempts++;
-					log.info("LOGIN FACEBOOK", `Validating cookie... (${cookieValidationAttempts}/${maxValidationAttempts})`);
+					log.info("LOGIN FACEBOOK", `🔍 Validating cookie... (${cookieValidationAttempts}/${maxValidationAttempts})`);
 
 					cookieIsValid = await checkLiveCookie(cookieString, facebookAccount.userAgent);
 
 					if (!cookieIsValid && cookieValidationAttempts < maxValidationAttempts) {
-						log.warn("LOGIN FACEBOOK", `Cookie validation failed, retrying... (${cookieValidationAttempts}/${maxValidationAttempts})`);
+						log.warn("LOGIN FACEBOOK", `⚠️ Cookie validation failed, retrying... (${cookieValidationAttempts}/${maxValidationAttempts})`);
 						// Exponential backoff with jitter
 						const delay = (2000 * cookieValidationAttempts) + (Math.random() * 1000);
 						await sleep(delay);
 					}
 				} catch (validationError) {
-					log.warn("LOGIN FACEBOOK", `Cookie validation error (attempt ${cookieValidationAttempts}):`, validationError.message);
+					log.warn("LOGIN FACEBOOK", `⚠️ Cookie validation error (attempt ${cookieValidationAttempts}):`, validationError.message);
 
 					// Enhanced network error detection
 					const networkErrorCodes = [
@@ -559,15 +566,15 @@ async function getAppStateToLogin(loginWithEmail) {
 						networkErrorMessages.some(msg => validationError.message.toLowerCase().includes(msg));
 
 					if (isNetworkError) {
-						log.info("LOGIN FACEBOOK", "Network error during validation, skipping cookie check due to connectivity issues");
+						log.info("LOGIN FACEBOOK", "🌐 Network error during validation, skipping cookie check");
 						cookieIsValid = true;
 						break;
 					}
 
 					// If it's the last attempt and not a network error, check if we should continue anyway
 					if (cookieValidationAttempts >= maxValidationAttempts) {
-						log.warn("LOGIN FACEBOOK", "Cookie validation failed after all attempts, but will try to proceed with login");
-						log.warn("LOGIN FACEBOOK", "If login fails, please update your cookies in account.txt");
+						log.warn("LOGIN FACEBOOK", "⚠️ Cookie validation failed after all attempts");
+						log.warn("LOGIN FACEBOOK", "🔄 Will attempt login anyway - if it fails, update your cookies");
 						cookieIsValid = true; // Allow login attempt
 						break;
 					}
@@ -578,13 +585,13 @@ async function getAppStateToLogin(loginWithEmail) {
 			}
 
 			if (cookieIsValid) {
-				log.info("LOGIN FACEBOOK", "Cookie validation successful, proceeding with login");
+				log.info("LOGIN FACEBOOK", "✅ Cookie validation successful, proceeding with login");
 			} else {
-				log.warn("LOGIN FACEBOOK", "Cookie validation uncertain, attempting login anyway");
-				log.warn("LOGIN FACEBOOK", "If you encounter login issues, please:");
-				log.warn("LOGIN FACEBOOK", "1. Get fresh cookies from your browser");
-				log.warn("LOGIN FACEBOOK", "2. Update account.txt with new cookie data");
-				log.warn("LOGIN FACEBOOK", "3. Ensure cookies include c_user, xs, and datr fields");
+				log.warn("LOGIN FACEBOOK", "⚠️ Cookie validation uncertain, attempting login anyway");
+				log.warn("LOGIN FACEBOOK", "🔧 If login fails, please:");
+				log.warn("LOGIN FACEBOOK", "   1. Get fresh cookies from your browser");
+				log.warn("LOGIN FACEBOOK", "   2. Update account.txt with new cookie data");
+				log.warn("LOGIN FACEBOOK", "   3. Ensure cookies include c_user, xs, and datr fields");
 			}
 		}
 	}
