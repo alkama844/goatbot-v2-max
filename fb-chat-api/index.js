@@ -533,7 +533,10 @@ function login(loginData, options, callback) {
 			);
 			
 			if (!hasEssentialCookies) {
-				return callback(new Error("appState missing essential cookies (c_user, xs). Please provide a complete cookie set."));
+				log.error("LOGIN", "appState missing essential cookies (c_user, xs)");
+				log.error("SOLUTION", "Please get fresh Facebook cookies from your browser");
+				log.error("HELP", "Use a browser extension to export cookies from facebook.com");
+				return callback(new Error("appState missing essential cookies. Please refresh your Facebook cookies."));
 			}
 			
 				setOptions(globalOptions, options);
