@@ -116,34 +116,70 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
-		// Check if the error is due to a non-JSON response
+		
+		// Enhanced error handling for different error types
 		if (err.message && err.message.includes("invalid json response")) {
-			log.error("listenMqtt", "Facebook returned non-JSON data. This could be due to:");
-			log.error("listenMqtt", "1. Account restrictions or limitations.");
-			log.error("listenMqtt", "2. Facebook rate limiting your requests.");
-			log.error("listenMqtt", "3. Expired session cookies.");
-			log.error("listenMqtt", "4. Facebook's security measures detecting bot-like activity.");
-			log.error("listenMqtt", "Please check your Facebook account and try again.");
+			log.error("listenMqtt", "🚨 Facebook returned invalid JSON response");
+			log.error("listenMqtt", "📋 This indicates:");
+			log.error("listenMqtt", "   1. Account cookies have expired");
+			log.error("listenMqtt", "   2. Account is temporarily restricted");
+			log.error("listenMqtt", "   3. Facebook detected bot-like activity");
+			log.error("listenMqtt", "   4. Account needs manual verification");
+			log.error("listenMqtt", "");
+			log.error("listenMqtt", "🔧 SOLUTIONS:");
+			log.error("listenMqtt", "   1. Get fresh cookies from your browser");
+			log.error("listenMqtt", "   2. Login to Facebook manually and complete any verifications");
+			log.error("listenMqtt", "   3. Update account.txt with new cookie data");
+			log.error("listenMqtt", "   4. Use !getfbstate command to generate fresh credentials");
 		}
+		
+		// Handle 404 errors specifically
+		if (err.message && err.message.includes("404")) {
+			log.error("listenMqtt", "🚨 404 Authentication Error Detected");
+			log.error("listenMqtt", "📋 This means:");
+			log.error("listenMqtt", "   • Facebook session has completely expired");
+			log.error("listenMqtt", "   • Account credentials are invalid");
+			log.error("listenMqtt", "   • Account may be banned or restricted");
+			log.error("listenMqtt", "");
+			log.error("listenMqtt", "🔧 IMMEDIATE ACTIONS REQUIRED:");
+			log.error("listenMqtt", "   1. Check if you can login to Facebook manually");
+			log.error("listenMqtt", "   2. Complete any security checks or verifications");
+			log.error("listenMqtt", "   3. Get completely fresh cookies from browser");
+			log.error("listenMqtt", "   4. Replace account.txt with new cookie data");
+			log.error("listenMqtt", "   5. Restart the bot after updating credentials");
+		}
+		
 		mqttClient.end();
 		if (ctx.globalOptions.autoReconnect) {
-			// Add delay before reconnection to prevent rapid reconnection loops
+			const delay = 10000 + Math.random() * 10000; // 10-20 second delay
+			
+			// Don't auto-reconnect on authentication errors
+			if (err.message && (err.message.includes("404") || err.message.includes("invalid json"))) {
+				log.error("listenMqtt", "🛑 Stopping auto-reconnect due to authentication failure");
+				log.error("listenMqtt", "🔄 Manual intervention required - please update your Facebook credentials");
+				globalCallback({
+					type: "auth_error",
+					error: "Facebook authentication failed - cookies expired or account restricted",
+					solutions: [
+						"Login to Facebook manually and check for security alerts",
+						"Get fresh cookies from your browser",
+						"Update account.txt with new cookie data",
+						"Use !getfbstate command for fresh credentials",
+						"Restart bot after updating credentials"
+					]
+				}, null);
+				return;
+			}
+			
 			setTimeout(() => {
-				// Don't auto-reconnect on 404 errors - they indicate auth issues
-				if (!err.message || !err.message.includes("404")) {
-					listenMqtt(defaultFuncs, api, ctx, globalCallback);
-				} else {
-					log.error("listenMqtt", "404 error detected - stopping auto-reconnect to prevent spam");
-					globalCallback({
-						type: "auth_error",
-						error: "Facebook authentication failed - please refresh your cookies"
-					}, null);
-				}
-			}, 5000 + Math.random() * 5000); // 5-10 second delay
+				log.info("listenMqtt", `🔄 Attempting reconnection in ${Math.floor(delay/1000)} seconds...`);
+				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			}, delay);
 		} else {
 			globalCallback({
 				type: "connection_error",
-				error: "MQTT connection failed - check your Facebook account status"
+				error: "MQTT connection failed - check your Facebook account status",
+				details: err.message
 			}, null);
 		}
 	});
