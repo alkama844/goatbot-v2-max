@@ -1,3 +1,4 @@
+
 /* eslint-disable no-redeclare */
 "use strict";
 const utils = require("../utils");
@@ -26,6 +27,10 @@ const topics = [
 	//Need to publish /messenger_sync_create_queue right after this
 	"/orca_presence",
 	//Will receive /sr_res right here.
+	"/pin_messages",
+	"/message_reactions",
+	"/read_receipts",
+	"/delivery_receipts",
 
 	"/legacy_web_mtouch"
 	// "/inbox",
@@ -97,7 +102,7 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		},
 		keepalive: 60,
 		reschedulePings: true,
-		reconnectPeriod: 3
+		reconnectPeriod: 0
 	};
 
 	if (typeof ctx.globalOptions.proxy != "undefined") {
@@ -111,9 +116,21 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 
 	mqttClient.on('error', function (err) {
 		log.error("listenMqtt", err);
+		// Check if the error is due to a non-JSON response
+		if (err.message && err.message.includes("invalid json response")) {
+			log.error("listenMqtt", "Facebook returned non-JSON data. This could be due to:");
+			log.error("listenMqtt", "1. Account restrictions or limitations.");
+			log.error("listenMqtt", "2. Facebook rate limiting your requests.");
+			log.error("listenMqtt", "3. Expired session cookies.");
+			log.error("listenMqtt", "4. Facebook's security measures detecting bot-like activity.");
+			log.error("listenMqtt", "Please check your Facebook account and try again.");
+		}
 		mqttClient.end();
 		if (ctx.globalOptions.autoReconnect) {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			// Add delay before reconnection to prevent rapid reconnection loops
+			setTimeout(() => {
+				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			}, 5000 + Math.random() * 5000); // 5-10 second delay
 		} else {
 			utils.checkLiveCookie(ctx, defaultFuncs)
 				.then(res => {
@@ -139,6 +156,12 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		topics.forEach(function (topicsub) {
 			mqttClient.subscribe(topicsub);
 		});
+
+		// Initialize human behavior
+		if (ctx.humanBehavior) {
+			ctx.humanBehavior.ctx = ctx;
+			ctx.humanBehavior.api = api;
+		}
 
 		let topic;
 		const queue = {
@@ -187,6 +210,11 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 			jsonMessage = JSON.parse(jsonMessage);
 		}
 		catch (e) {
+			// Handle potential non-JSON responses gracefully
+			log.warn("listenMqtt", "Received non-JSON message on topic:", topic);
+			log.warn("listenMqtt", "Message content:", jsonMessage);
+			// Optionally, you could try to process this message differently if it's a known binary format
+			// For now, we'll treat it as an empty object to avoid further errors.
 			jsonMessage = {};
 		}
 
@@ -230,6 +258,31 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 				from: jsonMessage.sender_fbid.toString(),
 				threadID: utils.formatID((jsonMessage.thread || jsonMessage.sender_fbid).toString())
 			};
+
+			// Enhanced human behavior simulation
+			if (ctx.humanBehavior && ctx.humanBehavior.isHumanMode) {
+				// Simulate natural browsing activity
+				setInterval(() => {
+					if (Math.random() < 0.3) {
+						mqttClient.publish("/foreground_state", JSON.stringify({
+							foreground: true,
+							last_interaction: Date.now(),
+							user_interaction: ctx.humanBehavior.simulateUserInteractions()
+						}), { qos: 1 });
+					}
+				}, 30000 + Math.random() * 60000);
+
+				// Simulate periodic presence updates
+				setInterval(() => {
+					if (Math.random() < 0.2) {
+						mqttClient.publish("/presence", JSON.stringify({
+							active: true,
+							last_seen: Date.now(),
+							activity_type: "browsing"
+						}), { qos: 1 });
+					}
+				}, 60000 + Math.random() * 120000);
+			}
 			(function () { globalCallback(null, typ); })();
 		} else if (topic === "/orca_presence") {
 			if (!ctx.globalOptions.updatePresence) {
@@ -247,6 +300,37 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 					(function () { globalCallback(null, presence); })();
 				}
 			}
+		} else if (topic === "/pin_messages") {
+			(function () {
+				globalCallback(null, {
+					type: "message_pin",
+					threadID: jsonMessage.thread_id?.toString(),
+					messageID: jsonMessage.message_id,
+					senderID: jsonMessage.actor_id?.toString(),
+					isPinned: jsonMessage.is_pinned,
+					timestamp: jsonMessage.timestamp
+				});
+			})();
+		} else if (topic === "/message_reactions") {
+			(function () {
+				globalCallback(null, {
+					type: "message_reaction_update",
+					threadID: jsonMessage.thread_id?.toString(),
+					messageID: jsonMessage.message_id,
+					reactions: jsonMessage.reactions || [],
+					timestamp: jsonMessage.timestamp
+				});
+			})();
+		} else if (topic === "/read_receipts") {
+			(function () {
+				globalCallback(null, {
+					type: "read_receipt_update",
+					threadID: jsonMessage.thread_id?.toString(),
+					messageID: jsonMessage.message_id,
+					readBy: jsonMessage.read_by || [],
+					timestamp: jsonMessage.timestamp
+				});
+			})();
 		}
 
 	});
@@ -277,6 +361,17 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
 				if (fmtMsg) {
 					if (ctx.globalOptions.autoMarkDelivery) {
 						markDelivery(ctx, api, fmtMsg.threadID, fmtMsg.messageID);
+					}
+
+					// Enhanced message formatting for new features
+					if (fmtMsg.type === "message") {
+						// Add read status
+						fmtMsg.isRead = false;
+						fmtMsg.isDelivered = true;
+
+						// Add message source info
+						fmtMsg.platform = "messenger";
+						fmtMsg.source = v.delta.class;
 					}
 				}
 				return !ctx.globalOptions.selfListen &&
@@ -322,6 +417,19 @@ function parseDelta(defaultFuncs, api, ctx, globalCallback, v) {
 							reaction: delta.deltaMessageReaction.reaction,
 							senderID: delta.deltaMessageReaction.senderId == 0 ? delta.deltaMessageReaction.userId.toString() : delta.deltaMessageReaction.senderId.toString(),
 							userID: (delta.deltaMessageReaction.userId || delta.deltaMessageReaction.senderId).toString()
+						});
+					})();
+				} else if (delta.deltaPinnedMessage && !!ctx.globalOptions.listenEvents) {
+					(function () {
+						globalCallback(null, {
+							type: "message_pin",
+							threadID: (delta.deltaPinnedMessage.threadKey.threadFbId ?
+								delta.deltaPinnedMessage.threadKey.threadFbId : delta.deltaPinnedMessage.threadKey
+									.otherUserFbId).toString(),
+							messageID: delta.deltaPinnedMessage.messageId,
+							senderID: delta.deltaPinnedMessage.senderId.toString(),
+							isPinned: delta.deltaPinnedMessage.isPinned,
+							timestamp: delta.deltaPinnedMessage.timestamp
 						});
 					})();
 				} else if (delta.deltaRecallMessageData && !!ctx.globalOptions.listenEvents) {
@@ -750,70 +858,18 @@ function markDelivery(ctx, api, threadID, messageID) {
 	}
 }
 
-// function getSeqId(defaultFuncs, api, ctx, globalCallback) {
-// 	const jar = ctx.jar;
-// 	utils
-// 		.get('https://www.facebook.com/', jar, null, ctx.globalOptions, { noRef: true })
-// 		.then(utils.saveCookies(jar))
-// 		.then(function (resData) {
-// 			const html = resData.body;
-// 			const oldFBMQTTMatch = html.match(/irisSeqID:"(.+?)",appID:219994525426954,endpoint:"(.+?)"/);
-// 			let mqttEndpoint = null;
-// 			let region = null;
-// 			let irisSeqID = null;
-// 			let noMqttData = null;
-
-// 			if (oldFBMQTTMatch) {
-// 				irisSeqID = oldFBMQTTMatch[1];
-// 				mqttEndpoint = oldFBMQTTMatch[2];
-// 				region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 				log.info("login", `Got this account's message region: ${region}`);
-// 			} else {
-// 				const newFBMQTTMatch = html.match(/{"app_id":"219994525426954","endpoint":"(.+?)","iris_seq_id":"(.+?)"}/);
-// 				if (newFBMQTTMatch) {
-// 					irisSeqID = newFBMQTTMatch[2];
-// 					mqttEndpoint = newFBMQTTMatch[1].replace(/\\\//g, "/");
-// 					region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 					log.info("login", `Got this account's message region: ${region}`);
-// 				} else {
-// 					const legacyFBMQTTMatch = html.match(/(\["MqttWebConfig",\[\],{fbid:")(.+?)(",appID:219994525426954,endpoint:")(.+?)(",pollingEndpoint:")(.+?)(3790])/);
-// 					if (legacyFBMQTTMatch) {
-// 						mqttEndpoint = legacyFBMQTTMatch[4];
-// 						region = new URL(mqttEndpoint).searchParams.get("region").toUpperCase();
-// 						log.warn("login", `Cannot get sequence ID with new RegExp. Fallback to old RegExp (without seqID)...`);
-// 						log.info("login", `Got this account's message region: ${region}`);
-// 						log.info("login", `[Unused] Polling endpoint: ${legacyFBMQTTMatch[6]}`);
-// 					} else {
-// 						log.warn("login", "Cannot get MQTT region & sequence ID.");
-// 						noMqttData = html;
-// 					}
-// 				}
-// 			}
-
-// 			ctx.lastSeqId = irisSeqID;
-// 			ctx.mqttEndpoint = mqttEndpoint;
-// 			ctx.region = region;
-// 			if (noMqttData) {
-// 				api["htmlData"] = noMqttData;
-// 			}
-
-// 			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-// 		})
-// 		.catch(function (err) {
-// 			log.error("getSeqId", err);
-// 		});
-// }
-
 module.exports = function (defaultFuncs, api, ctx) {
 	let globalCallback = identity;
-	getSeqId = function getSeqId() {
+	getSeqId = function getSeqId(retryCount = 0) {
+		const maxRetries = 3;
 		ctx.t_mqttCalled = false;
-		defaultFuncs
-			.post("https://www.facebook.com/api/graphqlbatch/", ctx.jar, form)
+		return utils
+			.get('https://www.facebook.com/api/graphqlbatch/', ctx.jar, null, ctx.globalOptions)
 			.then(utils.parseAndCheckLogin(ctx, defaultFuncs))
-			.then((resData) => {
+			.then(function(resData) {
+				if (resData && resData.error) throw resData;
 				if (utils.getType(resData) != "Array") throw { error: "Not logged in", res: resData };
-				if (resData && resData[resData.length - 1].error_results > 0) throw resData[0].o0.errors;
+				if (resData[resData.length - 1].error_results > 0) throw resData[0].o0.errors;
 				if (resData[resData.length - 1].successful_results === 0) throw { error: "getSeqId: there was no successful_results", res: resData };
 				if (resData[0].o0.data.viewer.message_threads.sync_sequence_id) {
 					ctx.lastSeqId = resData[0].o0.data.viewer.message_threads.sync_sequence_id;
@@ -822,6 +878,24 @@ module.exports = function (defaultFuncs, api, ctx) {
 			})
 			.catch((err) => {
 				log.error("getSeqId", err);
+				
+				// Handle JSON parse errors specifically
+				if (err.error === "JSON.parse error." && retryCount < maxRetries) {
+					const delay = (retryCount + 1) * 3000; // 3, 6, 9 seconds
+					log.warn("getSeqId", `Facebook returned binary/invalid data. Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+					
+					if (err.isBinaryData) {
+						log.warn("getSeqId", "Binary data detected - this usually indicates account restrictions or session expiration");
+						log.warn("getSeqId", "Please check your Facebook account and update your cookies if needed");
+					}
+					
+					return new Promise(resolve => {
+						setTimeout(() => {
+							resolve(getSeqId(retryCount + 1));
+						}, delay);
+					});
+				}
+				
 				if (utils.getType(err) == "Object" && err.error === "Not logged in") ctx.loggedIn = false;
 				return globalCallback(err);
 			});
@@ -855,6 +929,19 @@ module.exports = function (defaultFuncs, api, ctx) {
 		const msgEmitter = new MessageEmitter();
 		globalCallback = (callback || function (error, message) {
 			if (error) {
+				// Enhanced error handling for common Facebook API issues
+				if (error.error === "JSON.parse error. Check the `detail` property on this error.") {
+					log.error("listenMqtt", "Facebook returned invalid JSON response. This usually indicates:");
+					log.error("listenMqtt", "1. Account may be temporarily blocked or restricted");
+					log.error("listenMqtt", "2. Facebook may have changed their API format");
+					log.error("listenMqtt", "3. Network connectivity issues");
+					log.error("listenMqtt", "4. Cookie/session may have expired");
+
+					// Try to provide helpful debugging info
+					if (error.errorDetails) {
+						log.error("listenMqtt", "Response details:", error.errorDetails);
+					}
+				}
 				return msgEmitter.emit("error", error);
 			}
 			msgEmitter.emit("message", message);
@@ -882,11 +969,56 @@ module.exports = function (defaultFuncs, api, ctx) {
 			})
 		};
 
-		if (!ctx.firstListen || !ctx.lastSeqId) {
-			getSeqId(defaultFuncs, api, ctx, globalCallback);
-		} else {
-			listenMqtt(defaultFuncs, api, ctx, globalCallback);
-		}
+		// Add retry logic for getSeqId
+		const attemptConnection = (retryCount = 0) => {
+			const maxRetries = 3;
+			const baseDelay = 2000; // 2 seconds
+
+			if (!ctx.firstListen || !ctx.lastSeqId) {
+				try {
+					getSeqId()
+						.then(() => {
+							// Success - connection established
+						})
+						.catch((error) => {
+							log.error("getSeqId", "Connection failed:", error);
+
+							// Handle specific error types
+							if (error && error.error && error.error.includes("JSON.parse error")) {
+								log.warn("getSeqId", "Facebook returned non-JSON data. This usually indicates:");
+								log.warn("getSeqId", "1. Account restrictions or rate limiting");
+								log.warn("getSeqId", "2. Temporary Facebook server issues");
+								log.warn("getSeqId", "3. Need to refresh authentication or cookies");
+
+								if (error.errorDetails && error.errorDetails.possibleCause) {
+									log.warn("getSeqId", `Possible cause: ${error.errorDetails.possibleCause}`);
+								}
+							}
+
+							if (retryCount < maxRetries) {
+								const delay = baseDelay * Math.pow(2, retryCount);
+								log.warn("listenMqtt", `getSeqId failed, retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+								setTimeout(() => attemptConnection(retryCount + 1), delay);
+							} else {
+								log.error("listenMqtt", "Max retries exceeded for getSeqId");
+								globalCallback(error);
+							}
+						});
+				} catch (err) {
+					if (retryCount < maxRetries) {
+						const delay = baseDelay * Math.pow(2, retryCount);
+						log.warn("listenMqtt", `Connection attempt failed, retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+						setTimeout(() => attemptConnection(retryCount + 1), delay);
+					} else {
+						globalCallback(err);
+					}
+				}
+			} else {
+				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+			}
+		};
+
+		attemptConnection();
 
 		api.stopListening = msgEmitter.stopListening;
 		api.stopListeningAsync = msgEmitter.stopListeningAsync;
