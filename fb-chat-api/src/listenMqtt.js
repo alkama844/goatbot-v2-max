@@ -129,22 +129,22 @@ function listenMqtt(defaultFuncs, api, ctx, globalCallback) {
 		if (ctx.globalOptions.autoReconnect) {
 			// Add delay before reconnection to prevent rapid reconnection loops
 			setTimeout(() => {
-				listenMqtt(defaultFuncs, api, ctx, globalCallback);
+				// Don't auto-reconnect on 404 errors - they indicate auth issues
+				if (!err.message || !err.message.includes("404")) {
+					listenMqtt(defaultFuncs, api, ctx, globalCallback);
+				} else {
+					log.error("listenMqtt", "404 error detected - stopping auto-reconnect to prevent spam");
+					globalCallback({
+						type: "auth_error",
+						error: "Facebook authentication failed - please refresh your cookies"
+					}, null);
+				}
 			}, 5000 + Math.random() * 5000); // 5-10 second delay
 		} else {
-			utils.checkLiveCookie(ctx, defaultFuncs)
-				.then(res => {
-					globalCallback({
-						type: "stop_listen",
-						error: "Connection refused: Server unavailable"
-					}, null);
-				})
-				.catch(err => {
-					globalCallback({
-						type: "account_inactive",
-						error: "Maybe your account is blocked by facebook, please login and check at https://facebook.com"
-					}, null);
-				});
+			globalCallback({
+				type: "connection_error",
+				error: "MQTT connection failed - check your Facebook account status"
+			}, null);
 		}
 	});
 
@@ -862,10 +862,16 @@ module.exports = function (defaultFuncs, api, ctx) {
 	let globalCallback = identity;
 	getSeqId = function getSeqId(retryCount = 0) {
 		const maxRetries = 3;
+		const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 30000); // Exponential backoff, max 30s
 		ctx.t_mqttCalled = false;
+		
+		// Add delay before making request to avoid rapid retries
+		const initialDelay = retryCount > 0 ? retryDelay : 0;
+		
+		return new Promise(resolve => setTimeout(resolve, initialDelay)).then(() => 
 		return utils
 			.get('https://www.facebook.com/api/graphqlbatch/', ctx.jar, null, ctx.globalOptions)
-			.then(utils.parseAndCheckLogin(ctx, defaultFuncs))
+		).then(utils.parseAndCheckLogin(ctx, defaultFuncs))
 			.then(function(resData) {
 				if (resData && resData.error) throw resData;
 				if (utils.getType(resData) != "Array") throw { error: "Not logged in", res: resData };
@@ -879,20 +885,36 @@ module.exports = function (defaultFuncs, api, ctx) {
 			.catch((err) => {
 				log.error("getSeqId", err);
 				
-				// Handle JSON parse errors specifically
-				if (err.error === "JSON.parse error." && retryCount < maxRetries) {
-					const delay = (retryCount + 1) * 3000; // 3, 6, 9 seconds
-					log.warn("getSeqId", `Facebook returned binary/invalid data. Retrying in ${delay}ms... (${retryCount + 1}/${maxRetries})`);
+				// Handle specific error types
+				const isAuthError = err.statusCode === 404 || 
+					(err.error && (err.error.includes("404") || err.error.includes("Not logged in"))) ||
+					(err.message && err.message.includes("404"));
+				
+				const isJsonError = err.error === "JSON.parse error." || 
+					(err.message && err.message.includes("JSON.parse"));
+				
+				if ((isJsonError || isAuthError) && retryCount < maxRetries) {
+					log.warn("getSeqId", `Authentication/parsing error. Retrying in ${retryDelay}ms... (${retryCount + 1}/${maxRetries})`);
 					
-					if (err.isBinaryData) {
-						log.warn("getSeqId", "Binary data detected - this usually indicates account restrictions or session expiration");
-						log.warn("getSeqId", "Please check your Facebook account and update your cookies if needed");
+					if (isAuthError) {
+						log.warn("getSeqId", "404 error detected - Facebook authentication failed");
+						log.warn("getSeqId", "This usually means cookies have expired or account is restricted");
 					}
 					
-					return new Promise(resolve => {
-						setTimeout(() => {
-							resolve(getSeqId(retryCount + 1));
-						}, delay);
+					if (isJsonError && err.isBinaryResponse) {
+						log.warn("getSeqId", "Binary data detected - account restrictions or session expiration");
+					}
+					
+					return getSeqId(retryCount + 1);
+				}
+				
+				// If max retries exceeded or non-recoverable error
+				if (isAuthError) {
+					log.error("getSeqId", "Facebook authentication failed permanently");
+					log.error("getSeqId", "Please update your Facebook cookies in account.txt");
+					return globalCallback({
+						type: "auth_failed",
+						error: "Facebook authentication failed - cookies expired or account restricted"
 					});
 				}
 				
