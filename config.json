@@ -97,7 +97,6 @@
   "autoRefreshFbstate": false,
   "autoReloginWhenChangeAccount": false,
   "autoRestartWhenListenMqttError": false,
-  "skipCookieValidation": true,
   "autoReLogin": true,
   "restartListenMqtt": {
     "enable": true,
