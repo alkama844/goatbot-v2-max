@@ -162,5 +162,11 @@
     "maxRetries": 3,
     "retryDelay": 5000,
     "stopOnAuthError": true
+  },
+  "cookieRefresh": {
+    "autoRefreshOnError": true,
+    "maxRefreshAttempts": 2,
+    "refreshDelay": 30000,
+    "backupOldCookies": true
   }
 }
