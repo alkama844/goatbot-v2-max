@@ -97,6 +97,8 @@
   "autoRefreshFbstate": false,
   "autoReloginWhenChangeAccount": false,
   "autoRestartWhenListenMqttError": false,
+  "skipCookieValidation": true,
+  "autoReLogin": true,
   "restartListenMqtt": {
     "enable": true,
     "timeRestart": 3600000,
@@ -158,15 +160,22 @@
   "skipCookieValidation": false,
   "autoReLogin": false,
   "enhancedErrorHandling": {
-    "enable": true,
+    "enable": false,
     "maxRetries": 3,
     "retryDelay": 5000,
     "stopOnAuthError": true
   },
   "cookieRefresh": {
-    "autoRefreshOnError": true,
+    "autoRefreshOnError": false,
     "maxRefreshAttempts": 2,
     "refreshDelay": 30000,
     "backupOldCookies": true
+  },
+  "authErrorHandling": {
+    "autoRepair": false,
+    "emergencyMode": false,
+    "maxRepairAttempts": 3,
+    "repairDelay": 60000,
+    "monitorInterval": 30000
   }
 }
