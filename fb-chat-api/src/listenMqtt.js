@@ -869,7 +869,7 @@ module.exports = function (defaultFuncs, api, ctx) {
 		const initialDelay = retryCount > 0 ? retryDelay : 0;
 		
 		return new Promise(resolve => setTimeout(resolve, initialDelay)).then(() => 
-		return utils
+			utils
 			.get('https://www.facebook.com/api/graphqlbatch/', ctx.jar, null, ctx.globalOptions)
 		).then(utils.parseAndCheckLogin(ctx, defaultFuncs))
 			.then(function(resData) {
