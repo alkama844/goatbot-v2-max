@@ -106,6 +106,17 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 	}
 
 	/* Handle specific error types */
+	if (error && (error.type === "auth_failed" || error.type === "auth_error")) {
+		log.err("AUTHENTICATION", "Facebook authentication failed permanently");
+		log.err("CAUSE", "Your Facebook session has expired or account is restricted");
+		log.err("SOLUTION", "Please get fresh Facebook cookies from your browser");
+		log.err("STEPS", "1. Login to Facebook in your browser");
+		log.err("STEPS", "2. Use a cookie extension to export cookies");
+		log.err("STEPS", "3. Update account.txt with fresh cookie data");
+		log.err("STEPS", "4. Restart the bot");
+		return;
+	}
+	
 	if (error && error.error && error.error.includes("JSON.parse error")) {
 		log.err("handlerWhenListenHasError", "JSON parse error detected - Facebook returned invalid response format");
 
@@ -140,6 +151,7 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 				log.warn("handlerWhenListenHasError", `${index + 1}. ${solution}`);
 			});
 		}
+		return;
 	}
 
 	/* Handle 404 errors from parseAndCheckLogin */
@@ -160,14 +172,10 @@ module.exports = async function ({ api, threadModel, userModel, dashBoardModel, 
 		log.warn("handlerWhenListenHasError", "5. Update account.txt with fresh credentials");
 		log.warn("handlerWhenListenHasError", "6. Try logging into Facebook manually first");
 
-		// Auto-retry after a delay if autoReLogin is enabled
-		if (global.GoatBot.config.autoReLogin) {
-			log.info("handlerWhenListenHasError", "Auto re-login is enabled, will retry in 30 seconds...");
-			setTimeout(() => {
-				log.info("handlerWhenListenHasError", "Attempting automatic re-login due to 404 error...");
-				global.GoatBot.reLoginBot();
-			}, 30000);
-		}
+		// Don't auto-retry 404 errors as they indicate authentication issues
+		log.err("handlerWhenListenHasError", "Stopping auto-retry for 404 errors to prevent spam");
+		log.err("handlerWhenListenHasError", "Please manually fix the authentication issue");
+		return;
 	}
 
 	/* Handle getSeqId errors */
