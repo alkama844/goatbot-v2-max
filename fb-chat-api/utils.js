@@ -1318,32 +1318,61 @@ function parseAndCheckLogin(ctx, defaultFuncs, retryCount, sourceCall) {
 				const parsableData = makeParsable(data.body);
 				res = JSON.parse(parsableData);
 			} catch (e) {
+				// Enhanced error detection and handling
+				const bodyPreview = data.body ? data.body.substring(0, 100) + '...' : 'No body';
+				const isBinary = data.body && typeof data.body === 'string' && /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(data.body);
+				const isCompressed = data.body && typeof data.body === 'string' && 
+					(data.body.charCodeAt(0) === 0x1F && data.body.charCodeAt(1) === 0x8B);
+				const isGzipped = data.body && typeof data.body === 'string' && data.body.startsWith('\x1f\x8b');
+				
+				// Check for Facebook login redirect
+				const isLoginRedirect = data.body && typeof data.body === 'string' && 
+					(data.body.includes('login') || data.body.includes('checkpoint'));
+				
+				let errorType = 'JSON.parse error.';
+				let possibleCause = 'Facebook returned malformed JSON response';
+				let solutions = ['Check if your Facebook account is accessible'];
+				
+				if (isBinary || isCompressed || isGzipped) {
+					errorType = 'BINARY_RESPONSE_ERROR';
+					possibleCause = 'Facebook account cookies expired, account restricted, or session invalid';
+					solutions = [
+						'🔑 Get fresh Facebook cookies from your browser',
+						'🌐 Login to Facebook manually and complete any security checks',
+						'📝 Update account.txt with new cookie data',
+						'🤖 Use !getfbstate command to generate fresh credentials',
+						'🔄 Restart the bot after updating credentials'
+					];
+				} else if (isLoginRedirect) {
+					errorType = 'LOGIN_REDIRECT_ERROR';
+					possibleCause = 'Facebook is redirecting to login page - session expired';
+					solutions = [
+						'🔐 Your Facebook session has expired',
+						'🌐 Login to Facebook manually in your browser',
+						'🍪 Export fresh cookies using a browser extension',
+						'📝 Replace account.txt content with new cookies',
+						'🔄 Restart the bot'
+					];
+				}
+				
 				// Check if it's our custom binary error
 				if (e instanceof CustomError && e.error === 'BINARY_RESPONSE_ERROR') {
 					throw e;
 				}
 
-				// Log more details about the parsing error
-				const bodyPreview = data.body ? data.body.substring(0, 200) + '...' : 'No body';
-				const isBinary = data.body && typeof data.body === 'string' && /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(data.body);
-				const isCompressed = data.body && typeof data.body === 'string' && data.body.charCodeAt(0) === 0x1F && data.body.charCodeAt(1) === 0x8B;
-
 				throw new CustomError({
-					message: isBinary || isCompressed ? 'Facebook returned binary/compressed data instead of JSON' : 'JSON.parse error.',
-					detail: e,
+					message: `${errorType}: ${possibleCause}`,
+					detail: e.message,
 					res: data.body,
 					bodyPreview: bodyPreview,
 					responseType: typeof data.body,
 					responseLength: data.body ? data.body.length : 0,
-					isBinaryResponse: isBinary || isCompressed,
+					isBinaryResponse: isBinary || isCompressed || isGzipped,
+					isLoginRedirect: isLoginRedirect,
 					statusCode: data.statusCode,
-					possibleCause: isBinary ?
-						'Facebook account cookies expired or account restricted' :
-						'Facebook returned malformed JSON response',
-					solution: isBinary ?
-						'Refresh your Facebook cookies using !getfbstate command' :
-						'Check if your Facebook account is accessible',
-					error: 'JSON.parse error.',
+					possibleCause: possibleCause,
+					solutions: solutions,
+					error: errorType,
 					sourceCall: sourceCall
 				});
 			}
