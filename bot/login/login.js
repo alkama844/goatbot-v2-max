@@ -524,6 +524,11 @@ async function getAppStateToLogin(loginWithEmail) {
 
 			log.info("LOGIN FACEBOOK", "Essential cookie fields found, proceeding with validation...");
 
+			// Skip validation in development or if explicitly disabled
+			if (process.env.NODE_ENV === 'development' || global.GoatBot.config.skipCookieValidation) {
+				log.info("LOGIN FACEBOOK", "Cookie validation skipped - proceeding with login");
+				cookieIsValid = true;
+			} else {
 			while (cookieValidationAttempts < maxValidationAttempts && !cookieIsValid) {
 				try {
 					cookieValidationAttempts++;
@@ -569,6 +574,7 @@ async function getAppStateToLogin(loginWithEmail) {
 
 					await sleep(1500 * cookieValidationAttempts);
 				}
+			}
 			}
 
 			if (cookieIsValid) {
